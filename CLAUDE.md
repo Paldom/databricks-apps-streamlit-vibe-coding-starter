@@ -257,6 +257,7 @@ with st.sidebar:
 4. Import utilities from `utils.py`: `from utils import get_env, sql_conn, workspace_client_obo, render_sidebar`
 5. Add page content with `st.title()` and your components
 6. Streamlit will automatically discover and add it to navigation
+7. **Delete `pages/0_empty.py`** after creating your first actual page (it's just a template reference)
 
 **Note**: The file number prefix determines display order (e.g., `0_`, `1_`, `2_`, `3_`)
 
