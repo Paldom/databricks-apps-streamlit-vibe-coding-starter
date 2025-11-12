@@ -1,0 +1,57 @@
+command: ["streamlit", "run", "app.py"]
+
+env:
+  # ===== Data Access =====
+  # SQL Warehouse - for querying Delta tables
+  # - name: SQL_WAREHOUSE_ID
+  #   valueFrom: sql-warehouse        # Add SQL Warehouse resource with key: sql-warehouse
+
+  # Unity Catalog - table and volume paths
+  # - name: UNITY_CATALOG_TABLE
+  #   value: "main.default.my_table"  # Update with your table FQN
+
+  # - name: UNITY_CATALOG_VOLUME
+  #   value: "main.default.my_volume"  # Update with your volume path
+
+  # OLTP Database - connection string (store in secrets for production)
+  # - name: OLTP_CONNECTION_STRING
+  #   value: "postgresql://user:pass@host:5432/db"  # Or retrieve from secrets
+
+  # ===== AI/ML =====
+  # Model Serving - for ML inference
+  # - name: MODEL_SERVING_ENDPOINT
+  #   valueFrom: model-endpoint      # Add Model Serving Endpoint resource with key: model-endpoint
+
+  # Vector Search - for similarity search
+  # - name: VECTOR_SEARCH_ENDPOINT
+  #   valueFrom: vector-search-endpoint  # Add Vector Search Endpoint resource with key: vector-search-endpoint
+
+  # Genie - for AI chat
+  # - name: GENIE_SPACE_ID
+  #   valueFrom: genie-space           # Add Genie Space resource with key: genie-space
+
+  # ===== Business Intelligence =====
+  # Dashboard - embed URL (get from Dashboard → Share → Embed iframe)
+  # - name: DASHBOARD_EMBED_URL
+  #   value: "https://<workspace-host>/embed/dashboardsv3/<dashboard-id>"  # Update with your dashboard embed URL
+
+  # ===== Workflows =====
+  # Job - for triggering workflows
+  # - name: JOB_ID
+  #   valueFrom: workflow-job        # Add Job resource with key: workflow-job
+
+  # ===== Compute =====
+  # Cluster - for data transformation at scale
+  # - name: CLUSTER_ID
+  #   valueFrom: compute-cluster     # Add Cluster resource with key: compute-cluster
+
+  # ===== Governance =====
+  # External Connection - for governed HTTP endpoints
+  # - name: EXTERNAL_CONNECTION_NAME
+  #   valueFrom: external-connection # Add External Connection resource with key: external-connection
+
+  # Secrets - for secure credential storage
+  # - name: SECRET_SCOPE
+  #   value: "my-secret-scope"       # Update with your secret scope name
+  # - name: SECRET_KEY
+  #   value: "my-api-key"            # Update with your secret key name

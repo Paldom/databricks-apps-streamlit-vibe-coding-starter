@@ -1,0 +1,3 @@
+[submodule "cookbook"]
+	path = cookbook
+	url = https://github.com/databricks-solutions/databricks-apps-cookbook.git

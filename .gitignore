@@ -205,3 +205,11 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+.databricks
+
+# Mac OS
+.DS_Store
+
+# Local
+LOCAL.md
