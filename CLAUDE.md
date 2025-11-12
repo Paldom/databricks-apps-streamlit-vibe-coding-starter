@@ -52,7 +52,7 @@ The app uses Streamlit's standard multipage layout:
 
 **Critical**: The app uses **two auth modes**:
 - **SQL queries**: Uses `Config().authenticate` (app-level credentials via `credentials_provider`)
-- **Genie API calls**: Uses explicit user token via `WorkspaceClient(token=get_user_token(), auth_type="pat")`
+- **Genie API calls**: Uses standard `WorkspaceClient()` (Genie handles OBO internally)
 
 ### Resource Configuration Pattern
 Resources are **never hardcoded**. All resource IDs come from environment variables configured in `app.yaml`:
@@ -92,8 +92,15 @@ Use `get_env(name)` from `utils.py` to access env vars—it shows friendly error
 - **Cross-page state**: Session state is shared across all pages in the app
 
 ### Genie API Integration Pattern
+**IMPORTANT**: Always use `workspace_client()` (NOT `workspace_client_obo()`) for Genie API calls. Genie handles OBO authentication internally.
+
 Follow this exact flow (based on official samples):
 ```python
+from utils import workspace_client
+
+# Get standard workspace client (Genie handles OBO internally)
+w = workspace_client()
+
 # Start conversation
 conversation = w.genie.start_conversation_and_wait(space_id, prompt)
 st.session_state.conversation_id = conversation.conversation_id
@@ -266,6 +273,9 @@ with st.sidebar:
 - **SQL queries**: Change `credentials_provider` in `sql_conn()` in `utils.py`
 - **Genie/SDK calls**: Modify token passed to `WorkspaceClient()` in `workspace_client_obo()` in `utils.py`
 - **User info**: Extract from `st.context.headers` (see `render_user_badge()` in `utils.py` for available headers)
+
+### Working with Unity Catalog tables
+**IMPORTANT**: Do not guess table schemas, column names, or filter values without inspecting the actual table first.
 
 ---
 
