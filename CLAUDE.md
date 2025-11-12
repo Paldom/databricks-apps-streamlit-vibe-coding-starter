@@ -287,8 +287,17 @@ with st.sidebar:
 - **`@st.cache_resource`**: For connection objects (`sql_conn()` in `utils.py`)
 - **Multipage apps**: Automatic page discovery from `pages/` directory (Streamlit standard pattern)
 - **`st.chat_message()` + `st.chat_input()`**: For building chat UIs (see cookbook examples)
-- **`components.iframe()`**: For embedding external content (dashboards, etc.)
+- **`components.iframe()`**: For embedding external content with iframe (dashboards, etc.)
 - **`st.session_state`**: Persistent state across reruns and pages
+
+### Common Import Mistakes
+
+**Using components.iframe()** requires proper import:
+```python
+# CORRECT
+import streamlit.components.v1 as components
+components.iframe(url, height=600)
+```
 
 ---
 
