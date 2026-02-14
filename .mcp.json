@@ -11,6 +11,40 @@
     "Ref": {
       "type": "http",
       "url": "https://api.ref.tools/mcp"
+    },
+    "pytest": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-pytest"
+      ]
+    },
+    "sqlalchemy": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sqlalchemy"
+      ],
+      "env": {
+        "DATABASE_URL": "${DATABASE_URL}"
+      }
+    },
+    "puppeteer": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@anthropic/mcp-server-puppeteer"
+      ]
+    },
+    "browserbase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-browserbase"
+      ],
+      "env": {
+        "BROWSERBASE_API_KEY": "${BROWSERBASE_API_KEY}"
+      }
     }
   }
 }
