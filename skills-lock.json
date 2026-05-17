@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "streamlit-custom-style": {
+      "source": "Paldom/streamlit-custom-style",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/streamlit-custom-style/SKILL.md",
+      "computedHash": "4f90f9eff765cd97ee86e4186a61d2c205c6cd5f0f01fc75f4ef3a4f4896e454"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+# Streamlit project config.
+# Theme tokens live in .streamlit/brand-theme.toml (referenced via `base` below)
+# so the brand definition stays portable across apps.
+
+[server]
+# Required to self-host fonts from static/. brand-theme.toml references files
+# under app/static/fonts/ which Streamlit serves at /app/static/ when this is on.
+enableStaticServing = true
+
+[theme]
+base = ".streamlit/brand-theme.toml"
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"

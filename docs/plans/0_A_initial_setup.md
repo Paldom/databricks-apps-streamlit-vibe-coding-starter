@@ -37,18 +37,21 @@ The starter itself is small. Fill in the worksheet below — per-page plans cros
 | File | Purpose |
 |---|---|
 | `app.py` | Streamlit entrypoint: page config, sidebar, home content. |
-| `utils.py` | Shared helpers — `get_env`, `get_user_token`, `sql_conn`, `workspace_client_app`, `workspace_client_obo`, `render_sidebar`. |
+| `utils.py` | Shared helpers — `get_env`, `get_user_token`, `sql_conn`, `workspace_client_app`, `workspace_client_obo`, `init_page`. |
 | `app.yaml` | Apps runtime config: launch command + env-var bindings (empty baseline; per-page plans append). |
 | `pyproject.toml` | Python dependencies and project metadata (managed by `uv`). |
 | `uv.lock` | Pinned dependency tree produced by `uv lock`. Committed; Databricks Apps runs `uv sync` from it at deploy time. |
 | `databricks.yml` | DAB bundle definition (created in section 4). |
-| `assets/logo.svg` | Sidebar logo rendered by `render_sidebar()`. |
+| `.streamlit/config.toml` + `.streamlit/brand-theme.toml` | Streamlit theme — Databricks brand tokens, fonts, sidebar, dark mode. See `DESIGN-SYSTEM.md`. |
+| `static/fonts/` | Self-hosted DM Sans + DM Mono `.ttf` files referenced from `brand-theme.toml`. |
+| `assets/logos/` | 10 Databricks lockup / symbol variants used by `st.logo()` and as favicon. |
+| `DESIGN-SYSTEM.md` | Project's design-system guide (colours, type, logo, scoped-CSS pattern). |
 | `pages/` | Empty directory; Streamlit auto-discovers any `*.py` file inside it as a sidebar page. |
 
 **Authentication model.** When *User authorization* is enabled, Databricks Apps injects two relevant headers on every request:
 
 - `X-Forwarded-Access-Token` — the user's access token. `utils.get_user_token()` reads it and feeds it to OBO calls.
-- `X-Forwarded-Email` — used by `render_sidebar()` for the user badge.
+- `X-Forwarded-Email` — used by `init_page()` for the signed-in user badge.
 
 Two SDK clients are exposed:
 
@@ -109,7 +112,7 @@ If Claude Code is wired up to the Databricks MCP server, paste the prompt below 
 
 ```text
 Please stand up the empty Databricks App skeleton described in
-docs/plans/0_initial_setup.md.
+docs/plans/0_A_initial_setup.md.
 
 Inputs from my worksheet (section 1.1):
 - app_name:          <app_name>
@@ -285,24 +288,43 @@ def get_user_token() -> str:
     return token
 
 
-def render_sidebar() -> None:
-    """Render the logo + signed-in user badge."""
-    st.logo("assets/logo.svg")
+def init_page(
+    page_title: str,
+    *,
+    page_icon: str = "assets/logos/databricks-symbol-color.svg",
+    layout: str = "wide",
+    initial_sidebar_state: str = "expanded",
+) -> None:
+    """Bootstrap a page — page config + Databricks logo + signed-in user badge.
+
+    Call this as the very first Streamlit command on every page. See
+    DESIGN-SYSTEM.md for why a single bootstrap is preferred over a
+    parallel `apply_branding()` helper.
+    """
+    st.set_page_config(
+        page_title=page_title,
+        page_icon=page_icon,
+        layout=layout,
+        initial_sidebar_state=initial_sidebar_state,
+    )
+    st.logo(
+        "assets/logos/lockup-primary-color.svg",
+        icon_image="assets/logos/databricks-symbol-color.svg",
+        link="https://www.databricks.com",
+    )
     headers = st.context.headers or {}
     email = headers.get("X-Forwarded-Email")
-    avatar = None
-    if email:
-        md5 = hashlib.md5(email.strip().lower().encode("utf-8")).hexdigest()
-        avatar = f"https://www.gravatar.com/avatar/{md5}?s=64&d=identicon"
+    if not email:
+        return
+    md5 = hashlib.md5(email.strip().lower().encode("utf-8")).hexdigest()
+    avatar = f"https://www.gravatar.com/avatar/{md5}?s=64&d=identicon"
     with st.sidebar:
         st.markdown("#### Signed in")
         c1, c2 = st.columns([1, 3])
         with c1:
-            if avatar:
-                st.image(avatar, width=64)
+            st.image(avatar, width=64)
         with c2:
-            if email:
-                st.caption(email)
+            st.caption(email)
 
 
 def sql_conn():
@@ -335,14 +357,9 @@ def workspace_client_obo() -> WorkspaceClient:
 """Databricks Streamlit App - Main Entrypoint."""
 import streamlit as st
 
-from utils import render_sidebar
+from utils import init_page
 
-st.set_page_config(
-    page_title="Databricks Streamlit Starter",
-    page_icon=":material/hub:",
-    layout="wide",
-)
-render_sidebar()
+init_page(page_title="Databricks Streamlit Starter")
 
 st.title("Databricks Analytics")
 st.markdown(
@@ -359,8 +376,16 @@ command: ["streamlit", "run", "app.py"]
 env: []
 ```
 
-### 5.5 `assets/logo.svg`
-Any SVG used as the sidebar logo. A placeholder is fine for the first deploy; replace with your branding later.
+### 5.5 Branding assets — `.streamlit/`, `static/fonts/`, `assets/logos/`
+
+The repo ships with Databricks brand assets and a configured Streamlit theme:
+
+- `.streamlit/config.toml` enables static file serving and points the `[theme]` `base` at `brand-theme.toml`.
+- `.streamlit/brand-theme.toml` defines every brand token — colours (Lava / Navy / Oat), DM Sans + DM Mono `[[theme.fontFaces]]` blocks, sidebar palette, semantic colours, chart palettes, dark-mode variants.
+- `static/fonts/` holds the 10 DM Sans + DM Mono `.ttf` files and `OFL.txt` (SIL Open Font License).
+- `assets/logos/` holds the 10 lockup / symbol SVG variants used by `st.logo()` and as favicon.
+
+See `DESIGN-SYSTEM.md` for the full guide. To re-brand, edit `brand-theme.toml` and swap files under `assets/logos/`; the helper paths in `utils.init_page()` do not need to change unless filenames differ.
 
 ### 5.6 `pages/` directory
 Create an empty directory at the repo root. Streamlit auto-discovers `*.py` files inside it as sidebar pages. Per-page plans drop files here.

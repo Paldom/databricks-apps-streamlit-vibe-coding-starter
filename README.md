@@ -6,7 +6,13 @@ A production-ready starter template for building Streamlit apps on Databricks Ap
 
 ## Features
 
-_Add your app features here as you build..._
+- **Databricks-branded look-and-feel out of the box.** DM Sans + DM Mono, Databricks colour anchors, dark mode, sidebar palette, and chart palettes — all defined as Streamlit theme tokens in `.streamlit/brand-theme.toml`. See [`DESIGN-SYSTEM.md`](DESIGN-SYSTEM.md) for the brand guide.
+- **One-call page bootstrap.** `utils.init_page(page_title=...)` wires `st.set_page_config()`, `st.logo()`, and the signed-in user badge — no per-page drift.
+- **OBO authentication.** Forwarded user token via `X-Forwarded-Access-Token` flows into `sql_conn()` and `workspace_client_obo()`; Unity Catalog row/column policies are enforced for the signed-in user automatically.
+- **`uv`-managed.** `pyproject.toml` + `uv.lock` for fast, reproducible installs locally and on Databricks Apps.
+- **Asset bundle deploys.** `databricks.yml` declares the App, permissions, and per-page resource bindings — `databricks bundle deploy -t dev` is the one-shot deploy.
+
+_Add your app-specific features below as you build…_
 
 ## Local Development
 
@@ -157,14 +163,20 @@ env:
 
 ```
 .
-├── app.py              # Main entrypoint with home page
-├── utils.py            # Shared utilities and connection builders
+├── app.py              # Main entrypoint with home page (calls init_page)
+├── utils.py            # Shared helpers: init_page(), sql_conn(), workspace clients, …
 ├── pages/              # Page files (auto-discovered by Streamlit)
-│   ├── ...
+│   └── 0_empty.py
+├── .streamlit/
+│   ├── config.toml     # Enables static serving, points at brand-theme.toml
+│   └── brand-theme.toml # Databricks brand tokens — colours, fonts, dark mode, sidebar
+├── static/fonts/       # Self-hosted DM Sans + DM Mono (referenced by brand-theme.toml)
+├── assets/logos/       # Databricks lockup / symbol SVGs used by st.logo() and favicon
 ├── app.yaml            # Runtime config + resource bindings
 ├── pyproject.toml      # Python deps + project metadata (uv-managed)
 ├── uv.lock             # Pinned dependency tree (commit; Databricks runs `uv sync`)
 ├── databricks.yml      # Databricks Asset Bundle (deploy via `databricks bundle deploy`)
+├── DESIGN-SYSTEM.md    # Databricks brand guide for this Streamlit project
 └── README.md           # This file
 ```
 

@@ -40,7 +40,7 @@ uv run streamlit run app.py
 ### Multi-File Structure
 The app uses Streamlit's standard multipage layout:
 - **`app.py`**: Main entrypoint with page config, logo, user badge, and home page content
-- **`utils.py`**: Shared utilities (`get_env()`, `get_user_token()`, `render_sidebar()`, connection builders)
+- **`utils.py`**: Shared utilities (`get_env()`, `get_user_token()`, `init_page()`, connection builders)
 - **`pages/`**: Directory for page files that Streamlit auto-discovers:
   - `0_empty.py` - Template for creating new pages (included)
   - Add your own pages here (e.g., `1_my_page.py`, `2_another_page.py`)
@@ -92,7 +92,7 @@ Use `get_env(name)` from `utils.py` to access env vars—it shows friendly error
 
 ### State Management
 - **Session state**: Use `st.session_state` to persist data across page reruns (e.g., conversation IDs, user selections)
-- **Sidebar**: Call `render_sidebar()` in every page to show logo and user badge consistently
+- **Page bootstrap**: Call `init_page(page_title=...)` from `utils.py` as the very first Streamlit command on every page. It runs `st.set_page_config()`, registers the Databricks logo, and renders the signed-in user badge. There is intentionally no parallel `apply_branding()` helper — see `DESIGN-SYSTEM.md`.
 - **Cross-page state**: Session state is shared across all pages in the app
 
 ### Genie API Integration Pattern
@@ -256,12 +256,11 @@ with st.sidebar:
 
 **Manual steps**:
 1. Create new file in `pages/` directory: `pages/N_page_name.py`
-2. Add `st.set_page_config()` at top with page title and icon
-3. Call `render_sidebar()` after set_page_config
-4. Import utilities from `utils.py`: `from utils import get_env, sql_conn, workspace_client_obo, render_sidebar`
-5. Add page content with `st.title()` and your components
-6. Streamlit will automatically discover and add it to navigation
-7. **Delete `pages/0_empty.py`** after creating your first actual page (it's just a template reference)
+2. Import utilities from `utils.py`: `from utils import get_env, sql_conn, workspace_client_obo, init_page`
+3. Call `init_page(page_title="...")` as the very first Streamlit command — it handles `st.set_page_config()`, the Databricks logo via `st.logo()`, and the signed-in user badge in one call
+4. Add page content with `st.title()` and your components
+5. Streamlit will automatically discover and add it to navigation
+6. **Delete `pages/0_empty.py`** after creating your first actual page (it's just a template reference)
 
 **Note**: The file number prefix determines display order (e.g., `0_`, `1_`, `2_`, `3_`)
 
@@ -286,9 +285,9 @@ with st.sidebar:
 
 ## Streamlit-Specific Patterns Used
 
-- **`st.set_page_config()`**: Must be first Streamlit command in each file (`app.py` and each page file)
-- **`st.logo()`**: Sidebar logo (called within `render_sidebar()` in `utils.py`)
-- **`@st.cache_resource`**: For connection objects (`sql_conn()` in `utils.py`)
+- **`init_page()` from `utils.py`**: Single bootstrap that runs `st.set_page_config()`, registers the Databricks lockup + symbol via `st.logo()`, and renders the signed-in user badge. Must be the very first Streamlit command on every page.
+- **Theme config**: `.streamlit/config.toml` + `.streamlit/brand-theme.toml` hold every brand token. See `DESIGN-SYSTEM.md`.
+- **Self-hosted fonts**: DM Sans + DM Mono ship under `static/fonts/`, registered via `[[theme.fontFaces]]` blocks. `[server] enableStaticServing = true` is what makes them resolve.
 - **Multipage apps**: Automatic page discovery from `pages/` directory (Streamlit standard pattern)
 - **`st.chat_message()` + `st.chat_input()`**: For building chat UIs (see cookbook examples)
 - **`components.iframe()`**: For embedding external content with iframe (dashboards, etc.)
@@ -336,6 +335,10 @@ except Exception as e:
 - **`pyproject.toml`**: Python dependencies and project metadata (managed by `uv`)
 - **`uv.lock`**: Pinned dependency tree — committed; Databricks Apps runs `uv sync` from it at deploy time
 - **`databricks.yml`**: DAB bundle definition
+- **`.streamlit/config.toml`** + **`.streamlit/brand-theme.toml`**: Streamlit theme — Databricks brand tokens, fonts, sidebar, dark mode
+- **`static/fonts/`**: Self-hosted DM Sans + DM Mono `.ttf` files (referenced from `brand-theme.toml`)
+- **`assets/logos/`**: Databricks lockup / symbol SVGs used by `st.logo()` and as favicon
+- **`DESIGN-SYSTEM.md`**: Brand guide — colours, typography, logo, scoped-CSS pattern
 - **`README.md`**: Deployment instructions and troubleshooting
 - **`CLAUDE.md`**: This file - guidance for development
 - **`cookbook/`**: Git submodule with Databricks Apps examples (Streamlit, Dash, FastAPI, etc.)

@@ -1,21 +1,14 @@
 """Databricks Streamlit App - Main Entrypoint."""
 import streamlit as st
-from utils import render_sidebar
 
-# Configure page title and icon
-st.set_page_config(
-    page_title="Databricks Streamlit Starter",
-    page_icon="🏭",
-    layout="wide"
-)
+from utils import init_page
 
-# Render sidebar with logo and user badge
-render_sidebar()
+init_page(page_title="Databricks Streamlit Starter")
 
-# Main page content
-st.title("🏭 Databricks Analytics")
+st.title("Databricks Analytics")
 
-st.markdown("""
+st.markdown(
+    """
 Welcome to the Databricks Streamlit starter. This template is wired for
 on-behalf-of (OBO) authentication, so any queries you add will respect
 Unity Catalog row and column policies.
@@ -28,8 +21,12 @@ you can build on top of this starter:
 - Unity Catalog table viewer
 - Genie AI chat interface
 - Embedded AI/BI dashboard
-- Custom data visualizations
+- Custom data visualisations
 - Interactive data editing
-""")
 
-st.info("👈 Open the **Empty** template page from the sidebar, or add your own under `pages/`.")
+Visual style follows the Databricks Design System — see
+[`DESIGN-SYSTEM.md`](DESIGN-SYSTEM.md).
+"""
+)
+
+st.info("Open the **Empty** template page from the sidebar, or add your own under `pages/`.")

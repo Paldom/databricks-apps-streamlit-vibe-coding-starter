@@ -2,13 +2,13 @@
 
 Page-specific plan for `pages/1_Sample_Data.py` — a Unity Catalog data browser that queries a UC table on behalf of (OBO) the signed-in user, with sidebar filters, headline metrics, and a formatted table.
 
-> **Prerequisite.** Complete `0_initial_setup.md` first. This plan assumes the App, `databricks.yml`, `utils.py`, `app.py`, `app.yaml`, `pyproject.toml`, and `uv.lock` are already in place and that the worksheet values from §1.1 of that doc (`app_name`, `user_group_app`, etc.) are recorded.
+> **Prerequisite.** Complete `0_A_initial_setup.md` first. This plan assumes the App, `databricks.yml`, `utils.py`, `app.py`, `app.yaml`, `pyproject.toml`, and `uv.lock` are already in place and that the worksheet values from §1.1 of that doc (`app_name`, `user_group_app`, etc.) are recorded.
 
 ---
 
 ## 1. Parameters to set
 
-Only page-specific knobs. Values already captured in `0_initial_setup.md` §1.1 are referenced by name and not re-collected.
+Only page-specific knobs. Values already captured in `0_A_initial_setup.md` §1.1 are referenced by name and not re-collected.
 
 | Parameter | Where it lives | Notes |
 |---|---|---|
@@ -40,8 +40,8 @@ Only page-specific knobs. Values already captured in `0_initial_setup.md` §1.1 
 **Why session-state caching, not `st.cache_data`.** Streamlit's built-in `st.cache_data` is a process-wide cache shared across all users hitting the app process. With OBO, that would leak one user's view of the data into another user's session. `st.session_state` is per-user/per-browser-session and is safe.
 
 **End-to-end flow.**
-1. Page imports `get_env`, `sql_conn`, `render_sidebar` from `utils.py`.
-2. `render_sidebar()` renders the logo + signed-in user badge.
+1. Page imports `get_env`, `sql_conn`, `init_page` from `utils.py`.
+2. `init_page()` runs `st.set_page_config()`, registers the Databricks logo via `st.logo()`, and renders the signed-in user badge.
 3. `get_env("UNITY_CATALOG_TABLE")` reads the FQN from `app.yaml`; halts gracefully if unset.
 4. First page-load only: `sql_conn()` opens a DBSQL connection using the user token, the page issues one `SELECT`, materializes rows into pandas, computes a derived `trip_duration_min` column, and stashes the DataFrame in `st.session_state["trips_df"]`.
 5. Subsequent reruns (filter changes) read from session state.
@@ -57,7 +57,7 @@ Only page-specific knobs. Values already captured in `0_initial_setup.md` §1.1 
 
 ## 3. Databricks-side prerequisites
 
-These extend the empty App created in `0_initial_setup.md` with the warehouse + UC bindings this page needs.
+These extend the empty App created in `0_A_initial_setup.md` with the warehouse + UC bindings this page needs.
 
 ### 3.1 SQL Warehouse
 - A running warehouse the signed-in users have `CAN USE` on.
@@ -79,7 +79,7 @@ These extend the empty App created in `0_initial_setup.md` with the warehouse + 
 
 ### 3.4 Claude Code prompt — provision page permissions
 
-With the Databricks MCP server connected to Claude Code, paste the prompt below. Fill in the bracketed values from §1.1 above and from `0_initial_setup.md` §1.1.
+With the Databricks MCP server connected to Claude Code, paste the prompt below. Fill in the bracketed values from §1.1 above and from `0_A_initial_setup.md` §1.1.
 
 ```text
 Please provision the Databricks permissions needed by the Sample Data
@@ -88,8 +88,8 @@ page described in docs/plans/1_sample_data_page.md.
 Inputs from the worksheets:
 - UNITY_CATALOG_TABLE: <table-fqn, default samples.nyctaxi.trips>
 - SQL_WAREHOUSE_ID:    <warehouse-id>
-- app_name:            <app_name from 0_initial_setup.md>
-- user_group_app:      <user_group_app from 0_initial_setup.md>
+- app_name:            <app_name from 0_A_initial_setup.md>
+- user_group_app:      <user_group_app from 0_A_initial_setup.md>
 
 Do the following, idempotently (skip if already granted), and report
 each change you make:
@@ -121,7 +121,7 @@ confirm. Do not change grants on objects not listed above.
 
 ## 4. DAB updates
 
-Append to the `databricks.yml` created in `0_initial_setup.md`.
+Append to the `databricks.yml` created in `0_A_initial_setup.md`.
 
 ### 4.1 New variable
 ```yaml
@@ -163,7 +163,7 @@ databricks bundle deploy -t dev
 
 ## 5. Source code updates
 
-All paths below are relative to the repo root. The page only depends on helpers already exported by `utils.py` after `0_initial_setup.md`.
+All paths below are relative to the repo root. The page only depends on helpers already exported by `utils.py` after `0_A_initial_setup.md`.
 
 ### 5.1 `app.yaml`
 Append two entries to `env:`:
@@ -195,14 +195,9 @@ Create this file with the full contents below.
 import pandas as pd
 import streamlit as st
 
-from utils import get_env, render_sidebar, sql_conn
+from utils import get_env, init_page, sql_conn
 
-st.set_page_config(
-    page_title="Sample Data",
-    page_icon=":material/local_taxi:",
-    layout="wide",
-)
-render_sidebar()
+init_page(page_title="Sample Data", page_icon=":material/local_taxi:")
 
 # Table FQN comes from app.yaml (trusted config, not user input).
 TABLE_NAME = get_env("UNITY_CATALOG_TABLE")
