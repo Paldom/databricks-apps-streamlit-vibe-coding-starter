@@ -1,0 +1,66 @@
+name: Deploy
+
+# Deploy the Databricks App via GitHub OIDC (no long-lived secret).
+# Auth flow: `DATABRICKS_AUTH_TYPE=github-oidc` + `DATABRICKS_HOST` +
+# `DATABRICKS_CLIENT_ID` + GitHub's `id-token: write` permission. The
+# federation policy on the Databricks side trusts the subject
+# `repo:<org>/<repo>:environment:dev`, so this workflow MUST route
+# through the `dev` GitHub Environment for the subject to be stable.
+#
+# Public-repo hardening (see docs/plans/0_C_github_actions.md §4.3):
+#   - DATABRICKS_HOST and DATABRICKS_CLIENT_ID are read from Environment
+#     SECRETS, not vars — they get masked in workflow logs.
+#   - The `dev` Environment must restrict deployment branches to `main`
+#     only and require a manual approval, so a stray push to `main` or
+#     a workflow_dispatch from a feature branch cannot deploy unattended.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch, tag, or commit SHA) to deploy"
+        required: true
+        default: main
+
+permissions:
+  contents: read
+  id-token: write       # required for GitHub OIDC
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false   # never cancel an in-flight deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: dev            # gates the OIDC subject + per-env vars
+    env:
+      DATABRICKS_AUTH_TYPE: github-oidc
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Bundle validate
+        run: databricks bundle validate -t dev
+
+      - name: Bundle deploy
+        # Uploads source to the workspace and creates / updates the App.
+        # Does NOT restart the App process — the explicit `bundle run`
+        # step below does.
+        run: databricks bundle deploy -t dev
+
+      - name: Bundle run — start / restart the App
+        run: databricks bundle run streamlit-demo -t dev
