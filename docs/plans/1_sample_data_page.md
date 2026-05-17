@@ -2,7 +2,7 @@
 
 Page-specific plan for `pages/1_Sample_Data.py` — a Unity Catalog data browser that queries a UC table on behalf of (OBO) the signed-in user, with sidebar filters, headline metrics, and a formatted table.
 
-> **Prerequisite.** Complete `0_initial_setup.md` first. This plan assumes the App, `databricks.yml`, `utils.py`, `app.py`, `app.yaml`, and `requirements.txt` are already in place and that the worksheet values from §1.1 of that doc (`app_name`, `user_group_app`, etc.) are recorded.
+> **Prerequisite.** Complete `0_initial_setup.md` first. This plan assumes the App, `databricks.yml`, `utils.py`, `app.py`, `app.yaml`, `pyproject.toml`, and `uv.lock` are already in place and that the worksheet values from §1.1 of that doc (`app_name`, `user_group_app`, etc.) are recorded.
 
 ---
 
@@ -370,7 +370,7 @@ st.dataframe(
 
 1. **Static check** from the repo root:
    ```bash
-   python3 -m py_compile app.py utils.py pages/1_Sample_Data.py
+   uv run python -m py_compile app.py utils.py pages/1_Sample_Data.py
    ```
 2. **Bundle validate** (only if you added the DAB pieces from section 4):
    ```bash

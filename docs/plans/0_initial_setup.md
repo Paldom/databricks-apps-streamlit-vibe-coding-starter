@@ -39,7 +39,8 @@ The starter itself is small. Fill in the worksheet below — per-page plans cros
 | `app.py` | Streamlit entrypoint: page config, sidebar, home content. |
 | `utils.py` | Shared helpers — `get_env`, `get_user_token`, `sql_conn`, `workspace_client_app`, `workspace_client_obo`, `render_sidebar`. |
 | `app.yaml` | Apps runtime config: launch command + env-var bindings (empty baseline; per-page plans append). |
-| `requirements.txt` | Python dependencies. |
+| `pyproject.toml` | Python dependencies and project metadata (managed by `uv`). |
+| `uv.lock` | Pinned dependency tree produced by `uv lock`. Committed; Databricks Apps runs `uv sync` from it at deploy time. |
 | `databricks.yml` | DAB bundle definition (created in section 4). |
 | `assets/logo.svg` | Sidebar logo rendered by `render_sidebar()`. |
 | `pages/` | Empty directory; Streamlit auto-discovers any `*.py` file inside it as a sidebar page. |
@@ -84,6 +85,7 @@ The repo expects the Databricks MCP server (and the Claude Code update-check hoo
    ```
    The live files are gitignored, so they will not be committed.
 3. **Databricks CLI v0.218+** (`databricks --version`).
+4. **uv** — Python package manager (`uv --version`). Required because this project ships `pyproject.toml` + `uv.lock` instead of `requirements.txt`. Databricks Apps detects the lockfile and runs `uv sync` at deploy time; if `requirements.txt` is present it takes precedence and pip is used instead, so do **not** add one back. Install per [Astral's uv docs](https://docs.astral.sh/uv/).
 
 ### 3.2 Workspace
 - A Databricks workspace where Databricks Apps is available.
@@ -221,13 +223,33 @@ If you do not want to maintain the bundle, see `DEPLOY.md` Path B — `databrick
 
 These root-level files must exist before any per-page plan can be applied.
 
-### 5.1 `requirements.txt`
-```text
-streamlit
-pandas
-databricks-sql-connector
-databricks-sdk
+### 5.1 `pyproject.toml` + `uv.lock`
+
+Dependencies are managed by `uv`. The repo ships with `pyproject.toml` at root listing the four runtime libraries and a committed `uv.lock` with the resolved tree.
+
+```toml
+[project]
+name = "databricks-apps-streamlit-vibe-coding-starter"
+version = "0.1.0"
+description = "Streamlit-on-Databricks-Apps starter with OBO authentication, managed by uv."
+requires-python = ">=3.11"
+dependencies = [
+    "streamlit",
+    "pandas",
+    "databricks-sql-connector",
+    "databricks-sdk",
+]
 ```
+
+Workflow:
+```bash
+uv sync                              # create / refresh .venv from uv.lock
+uv add <package>                     # add a runtime dependency (updates pyproject.toml + uv.lock)
+uv lock                              # re-resolve and refresh uv.lock without changing deps
+uv run streamlit run app.py          # run in the project venv
+```
+
+> **Do not add a `requirements.txt`.** Databricks Apps gives `requirements.txt` precedence over `pyproject.toml` + `uv.lock` and silently falls back to `pip`. With `uv`, all runtime dependencies must be declared explicitly — Databricks Apps does not preinstall anything for `uv`-managed apps.
 
 ### 5.2 `utils.py`
 ```python
@@ -347,20 +369,24 @@ Create an empty directory at the repo root. Streamlit auto-discovers `*.py` file
 
 ## Verification
 
-1. **Static check** from the repo root:
+1. **Install deps locally** from the repo root:
    ```bash
-   python3 -m py_compile app.py utils.py
+   uv sync
    ```
-2. **Bundle validate**:
+2. **Static check**:
+   ```bash
+   uv run python -m py_compile app.py utils.py
+   ```
+3. **Bundle validate**:
    ```bash
    databricks bundle validate -t dev
    ```
-3. **Deploy and run**:
+4. **Deploy and run**:
    ```bash
    databricks bundle deploy -t dev
    databricks bundle run <app_name> -t dev
    ```
-4. **Smoke test in browser**
+5. **Smoke test in browser**
    - Open the app URL printed by `databricks bundle run`.
    - The home page renders, the sidebar shows the logo and signed-in email, no pages exist beyond the home view, the app log shows no errors.
-5. **Auth sanity** — the home page must work even with no user-authorization scopes enabled. Forwarded headers are still injected; OBO calls are deferred until a feature page is added.
+6. **Auth sanity** — the home page must work even with no user-authorization scopes enabled. Forwarded headers are still injected; OBO calls are deferred until a feature page is added.

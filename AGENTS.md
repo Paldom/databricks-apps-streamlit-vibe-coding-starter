@@ -22,12 +22,16 @@ This is a **starter template** for building multi-file Streamlit apps on **Datab
 ## Local Development
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# Install dependencies (uv reads pyproject.toml + uv.lock)
+uv sync
 
-# Run locally (requires env vars or modification for local auth)
-streamlit run app.py
+# Run locally in the project venv (requires env vars or modification for local auth)
+uv run streamlit run app.py
 ```
+
+> Dependencies are managed by `uv`. Do not add a `requirements.txt`: Databricks
+> Apps gives it precedence over `pyproject.toml` + `uv.lock` and falls back to
+> pip, which skips uv-managed deps.
 
 ---
 
@@ -329,7 +333,9 @@ except Exception as e:
   - `0_empty.py` - Template for creating new pages (copy this to start)
   - Add your pages here as `N_page_name.py`
 - **`app.yaml`**: Runtime config (command + env mapping)
-- **`requirements.txt`**: Python dependencies
+- **`pyproject.toml`**: Python dependencies and project metadata (managed by `uv`)
+- **`uv.lock`**: Pinned dependency tree — committed; Databricks Apps runs `uv sync` from it at deploy time
+- **`databricks.yml`**: DAB bundle definition
 - **`README.md`**: Deployment instructions and troubleshooting
 - **`CLAUDE.md`**: This file - guidance for development
 - **`cookbook/`**: Git submodule with Databricks Apps examples (Streamlit, Dash, FastAPI, etc.)

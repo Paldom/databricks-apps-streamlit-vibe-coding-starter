@@ -8,6 +8,29 @@ A production-ready starter template for building Streamlit apps on Databricks Ap
 
 _Add your app features here as you build..._
 
+## Local Development
+
+The project uses [`uv`](https://docs.astral.sh/uv/) for Python dependency management (`pyproject.toml` + `uv.lock`). Three commands to a working local app:
+
+```bash
+# 1. Install uv if you don't have it (see https://docs.astral.sh/uv/)
+uv --version
+
+# 2. Install Python deps into a project-local .venv
+uv sync
+
+# 3. Run the Streamlit app
+uv run streamlit run app.py
+```
+
+Open [http://localhost:8501](http://localhost:8501).
+
+Notes:
+
+- The home page (`app.py`) renders without any Databricks-side wiring. Pages under `pages/` that call `sql_conn()`, Genie, etc., need the corresponding env vars set in your shell (`SQL_WAREHOUSE_ID`, `UNITY_CATALOG_TABLE`, `GENIE_SPACE_ID`, ...) plus a way to inject the OBO `X-Forwarded-Access-Token` header. The Databricks Apps runtime sets all of this in production.
+- For a higher-fidelity local run that mirrors the Databricks Apps runtime (resolves `valueFrom` resources, sets the same env vars, picks the entrypoint from `app.yaml`), use `databricks apps run-local` — see [DEPLOY.md § C](DEPLOY.md).
+- Add new dependencies with `uv add <package>`. **Do not** create a `requirements.txt`; Databricks Apps gives it precedence over `pyproject.toml` and silently falls back to pip.
+
 ## Quick Start
 
 ### 1. Prerequisites
@@ -139,8 +162,10 @@ env:
 ├── pages/              # Page files (auto-discovered by Streamlit)
 │   ├── ...
 ├── app.yaml            # Runtime config + resource bindings
-├── requirements.txt    # Python dependencies
-└── README.md          # This file
+├── pyproject.toml      # Python deps + project metadata (uv-managed)
+├── uv.lock             # Pinned dependency tree (commit; Databricks runs `uv sync`)
+├── databricks.yml      # Databricks Asset Bundle (deploy via `databricks bundle deploy`)
+└── README.md           # This file
 ```
 
 ### Key Design Patterns

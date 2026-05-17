@@ -1,11 +1,12 @@
 # Deployment
 
-Two ways to deploy this app. Pick one — both produce a Databricks App you can open in the browser.
+Three ways to run this app. A and B produce a deployed Databricks App you open in the browser; C runs the app on your laptop with the same wiring Databricks Apps would inject in production.
 
 | Path | When to use |
 |---|---|
 | **A. Databricks Asset Bundle (recommended)** | Repeatable deploys, source-controlled resource bindings + permissions, CI-friendly. |
 | **B. Manual sync + apps deploy** | One-off testing, no bundle setup, you configure permissions in the Apps UI yourself. |
+| **C. Local run via `databricks apps run-local`** | High-fidelity local development that mirrors the Apps runtime (resolves `valueFrom` resources, sets the same env vars, uses the `command` from `app.yaml`) without deploying. |
 
 ---
 
@@ -76,3 +77,54 @@ databricks apps deploy streamlit-demo --source-code-path /Workspace/Shared/strea
 Then in the Apps UI:
 1. Grant `CAN_MANAGE` / `CAN_USE` on the app to the appropriate user groups.
 2. For each page you implement, add the resources and user-authorization scopes that the page's plan under `docs/plans/` calls for (e.g. a SQL Warehouse resource keyed `sql-warehouse` plus the `sql` scope for the Sample Data page).
+
+---
+
+## C. Local run via `databricks apps run-local` (development)
+
+Iterate locally with the same env-var / resource wiring Databricks Apps will inject in production. Nothing is deployed — the app runs on your laptop, but `valueFrom` references are resolved against the workspace just like a real deploy.
+
+### 1. Prerequisites
+- Path A prerequisites (Databricks CLI v0.218+, `uv`, an authenticated CLI profile against the workspace).
+- The Databricks App must already exist in the workspace. Run an initial deploy via path A or B so the App's resource bindings exist for `run-local` to read.
+
+### 2. Prepare the environment and start the app
+```bash
+databricks apps run-local \
+  --prepare-environment \
+  --entry-point app.yaml
+```
+
+- `--prepare-environment` runs `uv sync` so the local `.venv` matches `uv.lock`. It requires `uv` on `PATH`.
+- `--entry-point app.yaml` launches the `command` declared in `app.yaml` (e.g. `streamlit run app.py`).
+- The CLI prints the local URL (default `http://localhost:8000`); open it in a browser. Databricks injects the `X-Forwarded-Access-Token` header so the same OBO-aware helpers in `utils.py` work without a code path for local-only auth.
+
+### 3. Override env vars
+The CLI inherits env-var bindings from the deployed App (`valueFrom` resolves against the workspace). Override or extend with one or more `--env` flags:
+
+```bash
+databricks apps run-local \
+  --prepare-environment \
+  --entry-point app.yaml \
+  --env UNITY_CATALOG_TABLE=samples.nyctaxi.trips \
+  --env SQL_WAREHOUSE_ID=<warehouse-id>
+```
+
+This is useful when iterating on a new page that has env vars Databricks does not know about yet — set them locally before you wire them into `app.yaml` / `databricks.yml`.
+
+### 4. Debug
+Attach a Python debugger by adding `--debug`:
+
+```bash
+databricks apps run-local \
+  --prepare-environment \
+  --entry-point app.yaml \
+  --debug
+```
+
+The CLI prints the debugger connection details so your editor can attach.
+
+### Notes
+- The app's `source_code_path` is your current working directory; edits hot-reload via Streamlit, no redeploy needed.
+- Without `--prepare-environment`, `run-local` skips `uv sync` and assumes the local `.venv` is already populated. Use this once you have a stable lockfile and want a faster restart.
+- For a *no-Databricks-CLI* loop (just Streamlit, no resource resolution), use `uv run streamlit run app.py` instead — see [README § Local Development](README.md#local-development).
