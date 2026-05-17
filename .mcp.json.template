@@ -47,9 +47,9 @@
       }
     },
     "databricks": {
-      "command": "/Users/dpal/.ai-dev-kit/.venv/bin/python",
+      "command": "/Users/<YOUR_USERNAME>/.ai-dev-kit/.venv/bin/python",
       "args": [
-        "/Users/dpal/.ai-dev-kit/repo/databricks-mcp-server/run_server.py"
+        "/Users/<YOUR_USERNAME>/.ai-dev-kit/repo/databricks-mcp-server/run_server.py"
       ],
       "defer_loading": true,
       "env": {

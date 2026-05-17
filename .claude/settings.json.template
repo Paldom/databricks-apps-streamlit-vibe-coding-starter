@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash /Users/dpal/.ai-dev-kit/repo/.claude-plugin/check_update.sh",
+            "command": "bash /Users/<YOUR_USERNAME>/.ai-dev-kit/repo/.claude-plugin/check_update.sh",
             "timeout": 5
           }
         ]
