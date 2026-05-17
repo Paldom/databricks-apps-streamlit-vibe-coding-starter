@@ -23,9 +23,9 @@ This plan documents two ways for GitHub Actions to authenticate to Databricks. P
 | Forks / public repo | Safe — fork PRs cannot use the OIDC token of the upstream. | Risky — fork PRs would expose the secret if not guarded by an Environment. |
 | Setup effort | ~10 min (extra federation policy step). | ~5 min. |
 
-**Recommendation:** path **A (OIDC)** for any repo that will live longer than a sprint. Path **B** is fine for a quick PoC, a sandbox, or a workspace where federation policies are not yet enabled at the account level.
+**Shipped default:** path **B** (client secret) — fewer Databricks-side prerequisites, works on Azure Databricks accounts where the account-level federation-policy CLI is not yet wired up. The shipped `.github/workflows/deploy.yml` is configured for path B.
 
-The shipped `.github/workflows/deploy.yml` is configured for path **A**. Path **B** is a three-line patch (§5.3).
+**Recommendation (long-term):** path **A (OIDC)** for any repo that will live longer than a sprint — no secret to rotate, fork-PR safe. Switch to path A via the three-line patch in §5.3 once your account-level CLI auth is working.
 
 ---
 
@@ -42,15 +42,19 @@ The shipped `.github/workflows/deploy.yml` is configured for path **A**. Path **
 
 ### 1.1 Fill-in worksheet
 
-- **`auth_path`** = `A` (OIDC) or `B` (client secret)
-- **`deploy_sp_uuid`** (Databricks SP UUID) = `__________________`
-- **`deploy_sp_application_id`** (used as `DATABRICKS_CLIENT_ID`) = `__________________`
-- **`workspace_host`** (e.g. `https://adb-12345.6.azuredatabricks.net`) = `__________________`
-- **`github_org`** = `__________________`
-- **`github_repo`** = `__________________`
+Current setup uses **path B**. Path-A rows are kept for the future-upgrade path documented in §5.3.
+
+- **`auth_path`** = `B` (client secret) — shipped default
+- **`deploy_sp_application_id`** (used as `DATABRICKS_CLIENT_ID`) = `e2a8c2dc-d605-48e9-9cba-2f8bb4d84691`
+- **`deploy_sp_workspace_numeric_id`** (workspace-level SP numeric ID, for reference) = `147227875503770`
+- **`workspace_host`** = `https://adb-1272983411735654.14.azuredatabricks.net`
+- **`github_org`** = `Paldom`
+- **`github_repo`** = `databricks-apps-streamlit-vibe-coding-starter`
 - **`github_environment`** = `dev`
-- **A only — `oidc_audience`** = `https://github.com/<github_org>`
-- **B only — `deploy_sp_secret`** (copy once when generated) = `__________________`
+- **B in use — `DATABRICKS_CLIENT_SECRET`** = stored as a GitHub Environment secret; OAuth M2M value generated on the SP via `databricks service-principal-secrets create`. Rotate via the same command + update the GitHub secret.
+- **A (future) — `deploy_sp_account_uuid`** (account-level SP UUID — needed by `service-principal-federation-policy create`) = `__________________` *(look up via `databricks account service-principals list` once account auth is configured)*
+- **A (future) — `oidc_audience`** = `https://github.com/Paldom`
+- **A (future) — Federation subject** (computed) = `repo:Paldom/databricks-apps-streamlit-vibe-coding-starter:environment:dev`
 
 ---
 
@@ -61,7 +65,7 @@ The shipped `.github/workflows/deploy.yml` is configured for path **A**. Path **
 | File | Trigger | What runs | Auth |
 |---|---|---|---|
 | `.github/workflows/ci.yml` | Pull request, push to `main` | `uv sync --frozen`, `uv run python -m py_compile …` | None — no Databricks calls. Runs on fork PRs without any extra config. |
-| `.github/workflows/deploy.yml` | Push to `main`, `workflow_dispatch` | `databricks bundle validate → deploy → run` against the `dev` target | Path **A** (OIDC) as shipped, or path **B** (client secret) after a three-line patch — see §5.3. |
+| `.github/workflows/deploy.yml` | Push to `main`, `workflow_dispatch` | `databricks bundle validate → deploy → run` against the `dev` target | Path **B** (client secret) as shipped, or path **A** (OIDC) after a three-line patch — see §5.3. |
 
 **Why route through a GitHub Environment in both paths.**
 
@@ -309,7 +313,7 @@ jobs:
 
 Extend with `ruff`, `pytest`, or `mypy` steps if/when those are added — same job, no extra plumbing needed.
 
-### 5.2 `.github/workflows/deploy.yml` (shipped — path A, OIDC)
+### 5.2 `.github/workflows/deploy.yml` (shipped — path B, client secret)
 
 ```yaml
 on:
@@ -319,8 +323,7 @@ on:
       ref: { description: "Git ref to deploy", required: true, default: main }
 
 permissions:
-  contents: read
-  id-token: write          # OIDC
+  contents: read           # client-secret auth — no id-token: write needed
 
 concurrency:
   group: deploy-dev
@@ -329,11 +332,11 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: dev       # makes the OIDC subject deterministic
+    environment: dev       # scopes the secret + gates with reviewer rule
     env:
-      DATABRICKS_AUTH_TYPE: github-oidc
       DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
       DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
     steps:
       - uses: actions/checkout@v4
         with: { ref: ${{ inputs.ref || github.ref }} }
@@ -347,32 +350,31 @@ jobs:
 
 Key points:
 
-- **Three env vars only** — no `DATABRICKS_CLIENT_SECRET`. The `databricks/setup-cli@main` action plus `DATABRICKS_AUTH_TYPE=github-oidc` triggers the OIDC exchange under the hood.
-- **All workspace identifiers come from `secrets.*`, not `vars.*`.** On a public repo this is what gets `DATABRICKS_HOST` and `DATABRICKS_CLIENT_ID` masked in workflow logs (see §4.2 / §4.3).
+- **OAuth M2M auto-detected.** The Databricks CLI picks this auth mode whenever `DATABRICKS_CLIENT_ID` + `DATABRICKS_CLIENT_SECRET` are both set — no `DATABRICKS_AUTH_TYPE` needed.
+- **`permissions: contents: read` only.** Client-secret auth does not request a GitHub OIDC token, so `id-token: write` is omitted. Removing it shrinks the job's blast radius.
+- **All three workspace identifiers come from `secrets.*`, not `vars.*`.** On a public repo this is what gets `DATABRICKS_HOST`, `DATABRICKS_CLIENT_ID`, and `DATABRICKS_CLIENT_SECRET` masked in workflow logs (see §4.2 / §4.3).
 - **`bundle run` is intentional.** `bundle deploy` uploads code but does **not** restart the App process; the explicit `bundle run streamlit-demo -t dev` is what makes the new code go live.
-- **`environment: dev`** does three jobs at once: produces the stable OIDC subject `repo:<org>/<repo>:environment:dev` that the federation policy matches, scopes the secrets to this environment, and gates the run behind the required-reviewer rule from §4.3.
+- **`environment: dev`** does two jobs at once: scopes the three secrets to this environment (fork PRs cannot read them) and gates the run behind the required-reviewer rule from §4.3.
 - **`cancel-in-progress: false`** — never cancel an in-flight deploy. The concurrency group serialises pushes.
 
-### 5.3 *(path B only)* Switch `deploy.yml` to client-secret auth
+### 5.3 *(path A only)* Switch `deploy.yml` to GitHub OIDC
 
-Apply this patch to the shipped file. Three lines change: drop the `id-token: write` permission, drop the `DATABRICKS_AUTH_TYPE` env, and add the `DATABRICKS_CLIENT_SECRET` env.
+When the account-level federation policy is in place (§3.3.A), apply this patch to drop the long-lived secret. Three lines change: add the `id-token: write` permission, add `DATABRICKS_AUTH_TYPE=github-oidc`, and remove the `DATABRICKS_CLIENT_SECRET` env entry.
 
 ```diff
  permissions:
    contents: read
--  id-token: write          # OIDC
-+  # id-token not needed for client-secret auth
++  id-token: write          # required for GitHub OIDC
 
  jobs:
    deploy:
      runs-on: ubuntu-latest
--    environment: dev       # makes the OIDC subject deterministic
-+    environment: dev       # scopes the client-secret to this env + reviewers
+     environment: dev
      env:
--      DATABRICKS_AUTH_TYPE: github-oidc
++      DATABRICKS_AUTH_TYPE: github-oidc
        DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
        DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
-+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+-      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
 ```
 
 Result, in full:
@@ -380,19 +382,20 @@ Result, in full:
 ```yaml
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: dev
     env:
+      DATABRICKS_AUTH_TYPE: github-oidc
       DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
       DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
-      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
     steps: ...    # unchanged
 ```
 
-The Databricks CLI auto-detects OAuth M2M when `DATABRICKS_CLIENT_ID` + `DATABRICKS_CLIENT_SECRET` are both set, so no explicit `DATABRICKS_AUTH_TYPE` is needed.
+After switching, **delete the `DATABRICKS_CLIENT_SECRET` Environment secret** in GitHub and **revoke the SP secret** on the Databricks side (`databricks account service-principal-secrets delete --service-principal-id <uuid> --secret-id <id>`). Leaving them around defeats the security benefit of OIDC.
 
 ### 5.4 Optional: declare the SP in `databricks.yml` *(A + B)*
 
@@ -456,9 +459,9 @@ Every step above slots in without rewriting the auth pieces — the GitHub-Envir
    - The `dev` Environment shows the run in the deployment history.
    - `databricks bundle deploy` finishes without auth errors.
    - `databricks bundle run streamlit-demo -t dev` returns a URL; opening it shows the new commit live.
-   - **Public-repo hardening check**: the workspace URL is rendered as `***` in any log line that mentions it. Same for the client ID. If you see the raw URL or client ID, you wired them as variables instead of secrets — go back to §4.2.
+   - **Public-repo hardening check** (both paths): the workspace URL is rendered as `***` in any log line that mentions it. Same for the client ID and (path B) the client secret. If you see the raw URL or client ID, you wired them as variables instead of secrets — go back to §4.2.
+   - **Path B (shipped):** workflow log does **not** print `DATABRICKS_CLIENT_SECRET`; the masked-env section shows `DATABRICKS_CLIENT_*` entries; the CLI auto-detects OAuth M2M (no explicit `DATABRICKS_AUTH_TYPE` line in logs).
    - **Path A:** workflow log mentions an OIDC token exchange ("Reading the OIDC token from the runtime" or similar).
-   - **Path B:** workflow log does **not** print the secret; only the masked-env section shows `DATABRICKS_CLIENT_*` entries.
 
 4. **Negative test — path A only — wrong subject.** Temporarily edit the federation policy `subject` to `…:environment:foo`. The next deploy must fail at the OIDC exchange with a clear "no matching federation policy" error. Restore the subject. This confirms the policy is the gate, not bypassed by some hidden credential.
 

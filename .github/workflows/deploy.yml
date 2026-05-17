@@ -1,18 +1,18 @@
 name: Deploy
 
-# Deploy the Databricks App via GitHub OIDC (no long-lived secret).
-# Auth flow: `DATABRICKS_AUTH_TYPE=github-oidc` + `DATABRICKS_HOST` +
-# `DATABRICKS_CLIENT_ID` + GitHub's `id-token: write` permission. The
-# federation policy on the Databricks side trusts the subject
-# `repo:<org>/<repo>:environment:dev`, so this workflow MUST route
-# through the `dev` GitHub Environment for the subject to be stable.
+# Deploy the Databricks App via OAuth M2M (client ID + client secret).
+# The Databricks CLI auto-detects this auth mode when DATABRICKS_CLIENT_ID
+# and DATABRICKS_CLIENT_SECRET are both set — no explicit DATABRICKS_AUTH_TYPE
+# is needed.
 #
 # Public-repo hardening (see docs/plans/0_C_github_actions.md §4.3):
-#   - DATABRICKS_HOST and DATABRICKS_CLIENT_ID are read from Environment
-#     SECRETS, not vars — they get masked in workflow logs.
+#   - All three values (HOST, CLIENT_ID, CLIENT_SECRET) are Environment
+#     SECRETS, so they get masked in workflow logs.
 #   - The `dev` Environment must restrict deployment branches to `main`
-#     only and require a manual approval, so a stray push to `main` or
-#     a workflow_dispatch from a feature branch cannot deploy unattended.
+#     only and require a manual approval before the secrets are released.
+#
+# For the OIDC alternative (no long-lived secret, needs a federation
+# policy on the Databricks side) see docs/plans/0_C_github_actions.md §5.3.
 
 on:
   push:
@@ -25,8 +25,7 @@ on:
         default: main
 
 permissions:
-  contents: read
-  id-token: write       # required for GitHub OIDC
+  contents: read         # client-secret auth — no `id-token: write` needed
 
 concurrency:
   group: deploy-dev
@@ -35,11 +34,11 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: dev            # gates the OIDC subject + per-env vars
+    environment: dev            # scopes the secret + gates with the reviewer rule
     env:
-      DATABRICKS_AUTH_TYPE: github-oidc
       DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
       DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
     steps:
       - uses: actions/checkout@v4
         with:
