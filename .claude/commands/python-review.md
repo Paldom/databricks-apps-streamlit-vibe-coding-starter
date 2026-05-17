@@ -24,7 +24,7 @@ Review current Python changes with focus on high-risk issues.
 ### Databricks Patterns
 
 - Resource IDs or workspace values hardcoded instead of env-driven
-- Wrong client choice (`workspace_client()` vs `workspace_client_obo()`)
+- Wrong client choice (`workspace_client_app()` vs `workspace_client_obo()`)
 - OBO header/token misuse
 
 ### Security

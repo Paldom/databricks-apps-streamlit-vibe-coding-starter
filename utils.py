@@ -52,24 +52,29 @@ def render_sidebar():
                 st.caption(email)
 
 
-@st.cache_resource
 def sql_conn():
-    """Cache a DB SQL connection that uses the current user's token (OBO)."""
+    """Open a DB SQL connection that runs as the current user (OBO).
+
+    Not cached: st.cache_resource is process-global and would leak one user's
+    token to other sessions. Open a fresh connection per call/session.
+    """
     cfg = Config()  # host comes from Databricks Apps env (DATABRICKS_HOST) when running in Apps
     warehouse_id = get_env("SQL_WAREHOUSE_ID")
-    http_path = f"/sql/1.0/warehouses/{warehouse_id}"
     return sql.connect(
         server_hostname=cfg.host,
-        http_path=http_path,
-        credentials_provider=lambda: cfg.authenticate
+        http_path=f"/sql/1.0/warehouses/{warehouse_id}",
+        access_token=get_user_token(),
     )
 
-def workspace_client():
-    """WorkspaceClient that runs with the current user (OBO)."""
+def workspace_client_app() -> WorkspaceClient:
+    """WorkspaceClient using the Databricks App service principal (app authorization).
+
+    Use this for APIs that handle OBO internally (e.g., the Genie Conversation API).
+    """
     return WorkspaceClient()
 
 
-def workspace_client_obo():
-    """WorkspaceClient that runs with the current user (OBO)."""
+def workspace_client_obo() -> WorkspaceClient:
+    """WorkspaceClient using the signed-in user's forwarded token (user authorization)."""
     return WorkspaceClient(token=get_user_token(), auth_type="pat")
 

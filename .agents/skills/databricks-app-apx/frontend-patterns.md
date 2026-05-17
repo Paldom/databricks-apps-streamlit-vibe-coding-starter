@@ -1,376 +1,192 @@
-# Frontend Code Patterns for APX
+# Frontend Patterns
 
-Reference templates for frontend development. **Only consult when writing frontend code.**
+## Technology Stack
 
-## List Page Template (routes/_sidebar/entities.tsx)
+- **Framework:** React + TypeScript
+- **Build tool:** Vite + bun
+- **Routing:** @tanstack/react-router
+- **Data fetching:** @tanstack/react-query (via Orval-generated hooks)
+- **Components:** shadcn/ui
+- **API client:** Auto-generated from OpenAPI schema (Orval)
 
-```typescript
-import { createFileRoute, Link } from "@tanstack/react-router";
+## Query with Suspense (Recommended Pattern)
+
+Always use `useXSuspense` hooks with `Suspense` and `Skeleton` components for data fetching:
+
+```tsx
 import { Suspense } from "react";
-import { useListEntitiesSuspense, EntityStatus } from "@/lib/api";
-import { selector } from "@/lib/selector";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { QueryErrorResetBoundary } from "@tanstack/react-query";
+import { ErrorBoundary } from "react-error-boundary";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useListItemsSuspense } from "@/lib/api";
+import selector from "@/lib/selector";
 
-export const Route = createFileRoute("/_sidebar/entities")({
-  component: () => (
-    <div className="container mx-auto py-8">
-      <Card>
-        <CardHeader>
-          <CardTitle>Entities</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Suspense fallback={<TableSkeleton />}>
-            <EntitiesTable />
-          </Suspense>
-        </CardContent>
-      </Card>
-    </div>
-  ),
-});
+function ItemsContent() {
+  const { data } = useListItemsSuspense(selector());
+  return <div>{/* render data */}</div>;
+}
 
-function EntitiesTable() {
-  const { data: entities } = useListEntitiesSuspense(selector());
-
+export function ItemsPage() {
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Number</TableHead>
-            <TableHead>Title</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="text-right">Total</TableHead>
-            <TableHead>Created</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {entities.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={6} className="text-center text-muted-foreground">
-                No items found
-              </TableCell>
-            </TableRow>
-          ) : (
-            entities.map((entity) => (
-              <TableRow key={entity.id}>
-                <TableCell className="font-medium">{entity.entity_number}</TableCell>
-                <TableCell>{entity.title}</TableCell>
-                <TableCell>
-                  <Badge className={getStatusColor(entity.status)}>
-                    {entity.status}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right">{formatCurrency(entity.total)}</TableCell>
-                <TableCell>{formatDate(entity.created_at)}</TableCell>
-                <TableCell className="text-right">
-                  <Link
-                    to="/entities/$entityId"
-                    params={{ entityId: entity.id }}
-                    className="text-primary hover:underline"
-                  >
-                    View
-                  </Link>
-                </TableCell>
-              </TableRow>
-            ))
+    <QueryErrorResetBoundary>
+      {({ reset }) => (
+        <ErrorBoundary
+          onReset={reset}
+          fallbackRender={({ resetErrorBoundary }) => (
+            <div>
+              <p>Something went wrong</p>
+              <button onClick={resetErrorBoundary}>Try again</button>
+            </div>
           )}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
-function TableSkeleton() {
-  return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Number</TableHead>
-            <TableHead>Title</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="text-right">Total</TableHead>
-            <TableHead>Created</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {[...Array(4)].map((_, i) => (
-            <TableRow key={i}>
-              <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-              <TableCell><Skeleton className="h-4 w-40" /></TableCell>
-              <TableCell><Skeleton className="h-6 w-20" /></TableCell>
-              <TableCell className="text-right"><Skeleton className="h-4 w-16 ml-auto" /></TableCell>
-              <TableCell><Skeleton className="h-4 w-36" /></TableCell>
-              <TableCell className="text-right"><Skeleton className="h-4 w-20 ml-auto" /></TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
-// Helper functions
-const getStatusColor = (status: EntityStatus) => {
-  const colors = {
-    status_1: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
-    status_2: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
-  };
-  return colors[status] || "bg-gray-100 text-gray-800";
-};
-
-const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-};
-
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(amount);
-};
-```
-
-## Detail Page Template (routes/_sidebar/entities.$entityId.tsx)
-
-```typescript
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Suspense } from "react";
-import { useGetEntitySuspense, useUpdateEntity, useDeleteEntity } from "@/lib/api";
-import { selector } from "@/lib/selector";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft } from "lucide-react";
-
-export const Route = createFileRoute("/_sidebar/entities/$entityId")({
-  component: () => (
-    <div className="container mx-auto py-8">
-      <Suspense fallback={<DetailSkeleton />}>
-        <EntityDetail />
-      </Suspense>
-    </div>
-  ),
-});
-
-function EntityDetail() {
-  const { entityId } = Route.useParams();
-  const navigate = useNavigate();
-  const { data: entity } = useGetEntitySuspense(entityId, selector());
-
-  const updateMutation = useUpdateEntity();
-  const deleteMutation = useDeleteEntity();
-
-  const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this item?")) return;
-
-    try {
-      await deleteMutation.mutateAsync({ entityId: entity.id });
-      navigate({ to: "/entities" });
-    } catch (error) {
-      console.error("Failed to delete:", error);
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link to="/entities">
-            <Button variant="outline" size="icon">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-3xl font-bold">{entity.entity_number}</h1>
-            <p className="text-muted-foreground">Entity Details</p>
-          </div>
-        </div>
-        <Button
-          variant="destructive"
-          onClick={handleDelete}
-          disabled={deleteMutation.isPending}
         >
-          {deleteMutation.isPending ? "Deleting..." : "Delete"}
-        </Button>
-      </div>
-
-      {/* Content Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Title</p>
-              <p className="text-base">{entity.title}</p>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Status</p>
-              <p className="text-base">{entity.status}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Items</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {entity.items.map((item) => (
-                <div key={item.id} className="flex justify-between">
-                  <span>{item.name}</span>
-                  <span className="font-medium">{formatCurrency(item.value)}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+          <Suspense fallback={<Skeleton className="h-48 w-full" />}>
+            <ItemsContent />
+          </Suspense>
+        </ErrorBoundary>
+      )}
+    </QueryErrorResetBoundary>
   );
 }
+```
 
-function DetailSkeleton() {
+**Key rule:** Render static elements (headers, layout) immediately. Wrap only the data-fetching parts in `Suspense`.
+
+## Mutation with Cache Invalidation
+
+```tsx
+import { useCreateItem } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
+
+function CreateItemButton() {
+  const queryClient = useQueryClient();
+  const { mutate, isPending } = useCreateItem({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["listItems"] });
+      },
+    },
+  });
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Skeleton className="h-10 w-10" />
-        <div>
-          <Skeleton className="h-8 w-48 mb-2" />
-          <Skeleton className="h-4 w-32" />
-        </div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {[...Array(2)].map((_, i) => (
-          <Card key={i}>
-            <CardHeader>
-              <Skeleton className="h-6 w-32" />
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-3/4" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
+    <button
+      onClick={() => mutate({ data: { name: "New item" } })}
+      disabled={isPending}
+    >
+      {isPending ? "Creating..." : "Create"}
+    </button>
   );
 }
-
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(amount);
-};
 ```
 
-## Navigation Update (routes/_sidebar/route.tsx)
+The query key for invalidation matches the `operation_id` from the backend route (e.g., `operation_id="listItems"` → query key `["listItems"]`).
 
-Add to `navItems` array:
+## selector() Usage
 
-```typescript
-import { Package } from "lucide-react";  // Choose appropriate icon
+The `selector()` function provides a default query selector for clean data destructuring:
 
-const navItems = [
-  {
-    to: "/entities",
-    label: "Entities",
-    icon: <Package size={16} />,
-    match: (path: string) => path.startsWith("/entities"),
-  },
-  // ... existing items
-];
+```tsx
+// No params — simple list query
+const { data } = useListItemsSuspense(selector());
+
+// With params — pass query parameters alongside selector
+const { data } = useListItemsSuspense({
+  params: { page, page_size },
+  ...selector(),
+});
 ```
 
-## Common Formatters
+## Component Conventions
 
-```typescript
-// Currency
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(amount);
-};
+- Use **shadcn/ui** components — add via MCP `add_component` or `apx components add <name> --yes`
+- Store components in `src/<app>/ui/components/`
+- Group by functionality: `src/<app>/ui/components/chat/`, `src/<app>/ui/components/dashboard/`
+- If a component is installed to the wrong location (e.g., `src/components/`), move it to `src/<app>/ui/components/`
 
-// Date with time
-const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-};
+## Routing
 
-// Date only
-const formatDateOnly = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-};
+Routes live in `src/<app>/ui/routes/` and use `@tanstack/react-router` file-based routing.
 
-// Number with commas
-const formatNumber = (num: number) => {
-  return new Intl.NumberFormat("en-US").format(num);
-};
+## SSE Streaming (Chat/Agent)
+
+For SSE endpoints (e.g. `/api/chat`), generated React Query hooks **do not work**. Use manual `fetch()` + `ReadableStream`:
+
+```tsx
+import { useCallback, useState } from "react";
+
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export function useChat() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isStreaming, setIsStreaming] = useState(false);
+
+  const sendMessage = useCallback(async (content: string) => {
+    const userMsg: Message = { role: "user", content };
+    setMessages((prev) => [...prev, userMsg]);
+    setIsStreaming(true);
+
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: content }),
+    });
+
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let assistantContent = "";
+
+    setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const text = decoder.decode(value, { stream: true });
+      for (const line of text.split("\n")) {
+        if (line.startsWith("data: ")) {
+          const data = line.slice(6);
+          if (data === "[DONE]") break;
+          assistantContent += data;
+          setMessages((prev) => [
+            ...prev.slice(0, -1),
+            { role: "assistant", content: assistantContent },
+          ]);
+        }
+      }
+    }
+
+    setIsStreaming(false);
+  }, []);
+
+  return { messages, sendMessage, isStreaming };
+}
 ```
 
-## Status Badge Colors
+**Key rules:**
 
-```typescript
-const getStatusColor = (status: string) => {
-  const colors: Record<string, string> = {
-    pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
-    processing: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-    active: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
-    completed: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
-    cancelled: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300",
-    inactive: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300",
-  };
-  return colors[status] || "bg-gray-100 text-gray-800";
-};
+- SSE endpoints need manual `fetch()` — do NOT use generated API hooks for streaming.
+- Parse the stream line-by-line, looking for `data: ` prefixed lines.
+- Use `[DONE]` sentinel to detect stream completion.
+- Check configured registries for chat UI components (e.g. `@ai-elements/message`, `@ai-elements/prompt-input`) before building custom ones.
+
+## Data Fetching Rules
+
+- **Always** use `useXSuspense` hooks (not `useX` hooks) for page-level data loading
+- **Always** wrap suspense queries in `Suspense` + `ErrorBoundary`
+- **Always** provide a `Skeleton` fallback
+- **Never** manually call `fetch()` or `axios` — use the generated API hooks (**exception:** SSE streaming endpoints, see above)
+
+## Project Layout
+
 ```
-
-## Mutation Pattern with Error Handling
-
-```typescript
-const createMutation = useCreateEntity();
-
-const handleCreate = async (data: EntityIn) => {
-  try {
-    const result = await createMutation.mutateAsync({ data });
-    // Success - navigate or show message
-    navigate({ to: `/entities/${result.data.id}` });
-  } catch (error) {
-    console.error("Failed to create:", error);
-    // Show error to user
-  }
-};
+src/<app>/ui/
+├── components/        # UI components (shadcn/ui)
+│   └── ui/            # Installed shadcn base components
+├── routes/            # @tanstack/react-router pages
+├── lib/
+│   ├── api.ts         # Generated API client (Orval) — DO NOT edit manually
+│   └── selector.ts    # Default query selector
+└── styles/            # CSS styles
 ```

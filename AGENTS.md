@@ -92,14 +92,14 @@ Use `get_env(name)` from `utils.py` to access env vars—it shows friendly error
 - **Cross-page state**: Session state is shared across all pages in the app
 
 ### Genie API Integration Pattern
-**IMPORTANT**: Always use `workspace_client()` (NOT `workspace_client_obo()`) for Genie API calls. Genie handles OBO authentication internally.
+**IMPORTANT**: Always use `workspace_client_app()` (NOT `workspace_client_obo()`) for Genie API calls. Genie handles OBO authentication internally.
 
 Follow this exact flow (based on official samples):
 ```python
-from utils import workspace_client
+from utils import workspace_client_app
 
-# Get standard workspace client (Genie handles OBO internally)
-w = workspace_client()
+# Get app-authorized workspace client (Genie handles OBO internally)
+w = workspace_client_app()
 
 # Start conversation
 conversation = w.genie.start_conversation_and_wait(space_id, prompt)

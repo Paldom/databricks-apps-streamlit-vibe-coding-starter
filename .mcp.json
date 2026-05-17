@@ -51,6 +51,7 @@
       "args": [
         "/Users/dpal/.ai-dev-kit/repo/databricks-mcp-server/run_server.py"
       ],
+      "defer_loading": true,
       "env": {
         "DATABRICKS_CONFIG_PROFILE": "DEFAULT"
       }
