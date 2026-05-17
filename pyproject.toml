@@ -1,0 +1,11 @@
+[project]
+name = "databricks-apps-streamlit-vibe-coding-starter"
+version = "0.1.0"
+description = "Streamlit-on-Databricks-Apps starter with OBO authentication, managed by uv."
+requires-python = ">=3.11"
+dependencies = [
+    "streamlit>=1.57.0",
+    "pandas>=2.3.3",
+    "databricks-sql-connector>=4.2.6",
+    "databricks-sdk>=0.108.0",
+]

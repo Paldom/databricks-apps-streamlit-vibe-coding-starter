@@ -1,0 +1,65 @@
+# Databricks Asset Bundle for the Streamlit-on-Apps starter.
+#
+# Quickstart:
+#   1. Edit the dev target below: replace the <...> placeholders with
+#      your workspace's group names.
+#   2. Authenticate the CLI:    databricks auth login --host https://<workspace-host>
+#   3. Validate the bundle:     databricks bundle validate -t dev
+#   4. Deploy and run the app:  databricks bundle deploy -t dev
+#                               databricks bundle run streamlit-demo -t dev
+#
+# Per-page plans under docs/plans/ extend this file: they add variables,
+# append entries to resources.apps.streamlit-demo.resources, and add
+# values to targets.dev.variables. Start with docs/plans/0_initial_setup.md.
+#
+# See DEPLOY.md for the full deploy story and the manual-deploy alternative.
+
+bundle:
+  name: streamlit-demo
+
+variables:
+  user_group_manage:
+    description: "User group that receives CAN_MANAGE on the app."
+  user_group_app:
+    description: "User group that receives CAN_USE on the app and on per-page resources."
+
+resources:
+  apps:
+    streamlit-demo:
+      name: streamlit-demo
+      source_code_path: ./
+      permissions:
+        - level: CAN_MANAGE
+          group_name: ${var.user_group_manage}
+        - level: CAN_USE
+          group_name: ${var.user_group_app}
+      resources: []   # per-page plans append entries here (SQL warehouses, Genie spaces, etc.)
+
+# Files synced to the workspace alongside the app source.
+# Excludes keep deploys small and prevent doc/CI files from cluttering the app folder.
+sync:
+  exclude:
+    - .github/**
+    - .claude/**
+    - .local/**
+    - .databricks/**
+    - .venv/**
+    - .ruff_cache/**
+    - .mypy_cache/**
+    - .pytest_cache/**
+    - __pycache__/**
+    - "**/__pycache__/**"
+    - docs/**
+    - cookbook/**
+    - "*.md"
+    - .DS_Store
+    - .gitignore
+    - .gitmodules
+
+targets:
+  dev:
+    mode: development
+    default: true
+    variables:
+      user_group_manage: "<your-admin-group>"
+      user_group_app: "<your-users-group>"

@@ -19,8 +19,7 @@ command:
 
 env:
   - name: DATABRICKS_WAREHOUSE_ID
-    valueFrom:
-      resource: sql-warehouse
+    valueFrom: sql-warehouse
   - name: USE_MOCK_BACKEND
     value: "false"
 ```
@@ -30,11 +29,19 @@ env:
 | Framework | Command |
 |-----------|---------|
 | Dash | `["python", "app.py"]` |
-| Streamlit | `["streamlit", "run", "app.py", "--server.port", "8080", "--server.address", "0.0.0.0", "--server.headless", "true"]` |
+| Streamlit | `["streamlit", "run", "app.py"]` |
 | Gradio | `["python", "app.py"]` |
-| Flask | `["gunicorn", "app:app", "-w", "4", "-b", "0.0.0.0:8080"]` |
-| FastAPI | `["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]` |
+| Flask | `["gunicorn", "app:app", "-w", "4", "-b", "0.0.0.0:8000"]` |
+| FastAPI | `["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]` |
 | Reflex | `["reflex", "run", "--env", "prod"]` |
+
+### Excluded directories
+
+When uploading via the SDK's `upload_folder()` / `upload_to_workspace()`, the following directories are automatically skipped to keep uploads fast:
+
+`node_modules`, `__pycache__`, `.venv`, `venv`, `.tox`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `dist`, `build`, `.eggs`, `*.egg-info`
+
+If you use `databricks workspace import-dir` directly, it does **not** apply these exclusions. Either clean the directory first or use the SDK upload functions instead.
 
 ### Step 2: Create and Deploy
 
@@ -42,7 +49,7 @@ env:
 # Create the app
 databricks apps create <app-name>
 
-# Upload source code
+# Upload source code (make sure to exclude node_modules, venv, etc.)
 databricks workspace mkdirs /Workspace/Users/<user>/apps/<app-name>
 databricks workspace import-dir . /Workspace/Users/<user>/apps/<app-name>
 
@@ -104,7 +111,7 @@ databricks bundle run <resource_key> -t prod
 
 **Key difference from other resources**: environment variables go in `src/app/app.yaml`, not `databricks.yml`.
 
-For complete DABs guidance, use the **asset-bundles** skill.
+For complete DABs guidance, use the **databricks-bundles** skill.
 
 ---
 

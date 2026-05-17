@@ -213,3 +213,15 @@ __marimo__/
 
 # Local
 LOCAL.md
+.local/
+
+# MCP / IDE configs containing personal paths to ai-dev-kit.
+# Track only the *.template files; copy them to the live names locally.
+.mcp.json
+.cursor/mcp.json
+.vscode/mcp.json
+.codex/config.toml
+.claude/settings.json
+
+# ai-dev-kit local state (machine-specific install paths)
+.ai-dev-kit/.installed-skills

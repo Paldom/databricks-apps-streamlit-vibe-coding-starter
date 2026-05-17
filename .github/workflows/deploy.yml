@@ -1,0 +1,65 @@
+name: Deploy
+
+# Deploy the Databricks App via OAuth M2M (client ID + client secret).
+# The Databricks CLI auto-detects this auth mode when DATABRICKS_CLIENT_ID
+# and DATABRICKS_CLIENT_SECRET are both set — no explicit DATABRICKS_AUTH_TYPE
+# is needed.
+#
+# Public-repo hardening (see docs/plans/0_C_github_actions.md §4.3):
+#   - All three values (HOST, CLIENT_ID, CLIENT_SECRET) are Environment
+#     SECRETS, so they get masked in workflow logs.
+#   - The `dev` Environment must restrict deployment branches to `main`
+#     only and require a manual approval before the secrets are released.
+#
+# For the OIDC alternative (no long-lived secret, needs a federation
+# policy on the Databricks side) see docs/plans/0_C_github_actions.md §5.3.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch, tag, or commit SHA) to deploy"
+        required: true
+        default: main
+
+permissions:
+  contents: read         # client-secret auth — no `id-token: write` needed
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false   # never cancel an in-flight deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: dev            # scopes the secret + gates with the reviewer rule
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Bundle validate
+        run: databricks bundle validate -t dev
+
+      - name: Bundle deploy
+        # Uploads source to the workspace and creates / updates the App.
+        # Does NOT restart the App process — the explicit `bundle run`
+        # step below does.
+        run: databricks bundle deploy -t dev
+
+      - name: Bundle run — start / restart the App
+        run: databricks bundle run streamlit-demo -t dev

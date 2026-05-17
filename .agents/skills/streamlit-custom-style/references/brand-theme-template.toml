@@ -1,0 +1,100 @@
+# Brand Theme Template for Streamlit
+# Copy this file to .streamlit/brand-theme.toml and customize.
+# Reference it from .streamlit/config.toml with: base = ".streamlit/brand-theme.toml"
+
+# --- Custom Fonts ---
+# Self-host fonts in static/fonts/ to avoid CDN dependencies.
+# Requires [server] enableStaticServing = true in config.toml.
+# Variable fonts (.ttf) are recommended — one file covers all weights.
+
+[[theme.fontFaces]]
+family = "Manrope"
+url = "app/static/fonts/Manrope-VariableFont_wght.ttf"
+style = "normal"
+# weight = 400        # optional: restrict to specific weight
+# For multiple font files (e.g., separate regular and bold):
+# [[theme.fontFaces]]
+# family = "Manrope"
+# url = "app/static/fonts/Manrope-Bold.ttf"
+# weight = 700
+
+# --- Light Theme (default) ---
+
+[theme]
+base = "light"
+
+# Typography
+font = "Manrope, sans-serif"          # Body text font
+headingFont = "Manrope, sans-serif"   # Heading font (h1-h6)
+codeFont = "monospace"                # Code block font
+baseFontSize = 16                     # Root font size in pixels
+baseFontWeight = 400                  # Root font weight
+
+# Core colors
+primaryColor = "#5FB79B"              # Buttons, links, interactive elements
+backgroundColor = "#FFFFFF"           # Main content area background
+secondaryBackgroundColor = "#F6F8FA"  # Sidebar, widget backgrounds
+textColor = "#12283F"                 # Primary text color
+
+# Additional colors
+linkColor = "#5FB79B"                 # Hyperlink color
+linkUnderline = false                 # Underline links?
+codeTextColor = "#12283F"             # Code text color
+codeBackgroundColor = "#F6F8FA"       # Code block background
+
+# Borders and shape
+borderColor = "#D7E2EA"              # General border color
+showWidgetBorder = true              # Show borders on input widgets
+showSidebarBorder = true             # Show border between sidebar and content
+baseRadius = "full"                  # Border radius: "none", "sm", "md", "lg", "full"
+buttonRadius = "full"                # Button-specific radius
+
+# DataFrame styling
+dataframeHeaderBackgroundColor = "#EEF3F7"
+dataframeBorderColor = "#D7E2EA"
+
+# Chart palettes — charts inherit these automatically
+chartCategoricalColors = ["#5FB79B", "#12283F", "#3C6E71", "#E7A83B", "#D96B6B"]
+chartSequentialColors = ["#F0FAF6", "#D8F1E7", "#B9E4D3", "#92D2B8", "#5FB79B"]
+chartDivergingColors = ["#D96B6B", "#F3D6D6", "#F6F8FA", "#D6ECE4", "#5FB79B"]
+
+# Semantic colors (used by st.success, st.error, st.warning, etc.)
+redColor = "#C14545"
+orangeColor = "#CC7A00"
+yellowColor = "#A87900"
+greenColor = "#228B5D"
+blueColor = "#2F6FDE"
+violetColor = "#7457D8"
+grayColor = "#61707D"
+
+# --- Sidebar ---
+# The sidebar can have its own independent color scheme.
+
+[theme.sidebar]
+backgroundColor = "#12283F"           # Dark sidebar background
+secondaryBackgroundColor = "#0F2236"
+textColor = "#F8FAFC"                 # Light text for contrast
+linkColor = "#8AD7BF"                 # Lighter green for dark background
+showWidgetBorder = true
+
+# --- Dark Theme ---
+# Users can switch to dark mode in the Streamlit settings menu.
+# Tip: lighten primaryColor slightly for dark backgrounds.
+
+[theme.dark]
+primaryColor = "#7CCDB1"              # Slightly lighter green
+backgroundColor = "#0E1117"
+secondaryBackgroundColor = "#1A2230"
+textColor = "#F8FAFC"
+linkColor = "#8AD7BF"
+codeTextColor = "#F8FAFC"
+codeBackgroundColor = "#151B24"
+borderColor = "#334155"
+dataframeBorderColor = "#334155"
+showWidgetBorder = true
+
+[theme.dark.sidebar]
+backgroundColor = "#0B1220"
+secondaryBackgroundColor = "#111827"
+textColor = "#F8FAFC"
+linkColor = "#8AD7BF"

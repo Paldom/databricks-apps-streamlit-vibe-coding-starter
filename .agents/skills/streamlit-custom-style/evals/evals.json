@@ -1,0 +1,23 @@
+{
+  "skill_name": "streamlit-custom-style",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I have a Streamlit app and I want to add my company's brand colors (primary: #E63946, background: #F1FAEE, text: #1D3557) and use the Inter font. How should I set this up so it doesn't break when Streamlit updates?",
+      "expected_output": "Should recommend brand-theme.toml with the specified colors, self-hosted Inter font via [[theme.fontFaces]], and config.toml referencing the theme file. Should NOT suggest CSS @import for fonts or st.markdown with unsafe_allow_html.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "My streamlit app needs a dark sidebar with white text, and I want users to be able to switch between light and dark mode. Also my charts should use my brand palette instead of the default colors.",
+      "expected_output": "Should use [theme.sidebar] for dark sidebar, [theme.dark] section for dark mode, and chartCategoricalColors/chartSequentialColors for chart branding. All in brand-theme.toml, not CSS.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "I need custom button styles in my Streamlit app - a red 'delete' button and a green 'approve' button, plus I want some content in card-like containers with borders. The built-in button types aren't enough.",
+      "expected_output": "Should use st.button with key='delete' and key='approve', then .st-key-delete and .st-key-approve CSS selectors. Card containers via st.container(key='card') with .st-key-card CSS. Should inject CSS via st.html(), not st.markdown with unsafe_allow_html. Should NOT use global button selectors.",
+      "files": []
+    }
+  ]
+}

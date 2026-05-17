@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "databricks": {
+      "command": "/Users/<YOUR_USERNAME>/.ai-dev-kit/.venv/bin/python",
+      "args": [
+        "/Users/<YOUR_USERNAME>/.ai-dev-kit/repo/databricks-mcp-server/run_server.py"
+      ],
+      "defer_loading": true,
+      "env": {
+        "DATABRICKS_CONFIG_PROFILE": "DEFAULT"
+      }
+    }
+  }
+}

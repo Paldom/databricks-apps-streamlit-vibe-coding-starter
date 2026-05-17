@@ -1,0 +1,34 @@
+name: CI
+
+# Pull-request and main-branch sanity checks. Pure Python / no Databricks
+# calls, so it does NOT need OIDC, secrets, or environments. Runs on
+# fork PRs without extra config.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install Python deps from uv.lock
+        run: uv sync --frozen
+
+      - name: Static check
+        run: uv run python -m py_compile app.py utils.py pages/0_empty.py

@@ -1,0 +1,60 @@
+{
+  "mcpServers": {
+    "context7": {
+      "type": "http",
+      "url": "https://mcp.context7.com/mcp"
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp"
+    },
+    "Ref": {
+      "type": "http",
+      "url": "https://api.ref.tools/mcp"
+    },
+    "pytest": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-pytest"
+      ]
+    },
+    "sqlalchemy": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sqlalchemy"
+      ],
+      "env": {
+        "DATABASE_URL": "${DATABASE_URL}"
+      }
+    },
+    "puppeteer": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@anthropic/mcp-server-puppeteer"
+      ]
+    },
+    "browserbase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-browserbase"
+      ],
+      "env": {
+        "BROWSERBASE_API_KEY": "${BROWSERBASE_API_KEY}"
+      }
+    },
+    "databricks": {
+      "command": "/Users/<YOUR_USERNAME>/.ai-dev-kit/.venv/bin/python",
+      "args": [
+        "/Users/<YOUR_USERNAME>/.ai-dev-kit/repo/databricks-mcp-server/run_server.py"
+      ],
+      "defer_loading": true,
+      "env": {
+        "DATABRICKS_CONFIG_PROFILE": "DEFAULT"
+      }
+    }
+  }
+}

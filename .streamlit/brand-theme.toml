@@ -1,0 +1,148 @@
+# Databricks Brand Theme for Streamlit
+# Anchors: Lava 600 (#FF3621), Navy 800 (#1B3139), Oat Light (#F9F7F4)
+# Type:    DM Sans (UI) + DM Mono (code)
+# Both fonts are SIL OFL — see static/fonts/OFL.txt.
+
+# ---- Font registration ------------------------------------------------------
+# Self-hosted; requires [server] enableStaticServing = true in config.toml.
+
+[[theme.fontFaces]]
+family = "DM Sans"
+url = "app/static/fonts/dm-sans-regular.ttf"
+weight = 400
+style = "normal"
+
+[[theme.fontFaces]]
+family = "DM Sans"
+url = "app/static/fonts/dm-sans-italic.ttf"
+weight = 400
+style = "italic"
+
+[[theme.fontFaces]]
+family = "DM Sans"
+url = "app/static/fonts/dm-sans-medium.ttf"
+weight = 500
+style = "normal"
+
+[[theme.fontFaces]]
+family = "DM Sans"
+url = "app/static/fonts/dm-sans-medium-italic.ttf"
+weight = 500
+style = "italic"
+
+[[theme.fontFaces]]
+family = "DM Sans"
+url = "app/static/fonts/dm-sans-bold.ttf"
+weight = 700
+style = "normal"
+
+[[theme.fontFaces]]
+family = "DM Sans"
+url = "app/static/fonts/dm-sans-bold-italic.ttf"
+weight = 700
+style = "italic"
+
+[[theme.fontFaces]]
+family = "DM Mono"
+url = "app/static/fonts/dm-mono-light.ttf"
+weight = 300
+style = "normal"
+
+[[theme.fontFaces]]
+family = "DM Mono"
+url = "app/static/fonts/dm-mono-regular.ttf"
+weight = 400
+style = "normal"
+
+[[theme.fontFaces]]
+family = "DM Mono"
+url = "app/static/fonts/dm-mono-italic.ttf"
+weight = 400
+style = "italic"
+
+[[theme.fontFaces]]
+family = "DM Mono"
+url = "app/static/fonts/dm-mono-medium.ttf"
+weight = 500
+style = "normal"
+
+# ---- Light theme (default) --------------------------------------------------
+
+[theme]
+base = "light"
+
+# Typography
+font = "DM Sans, sans-serif"
+headingFont = "DM Sans, sans-serif"
+codeFont = "DM Mono, monospace"
+baseFontSize = 16
+baseFontWeight = 400
+
+# Core colors
+primaryColor = "#FF3621"              # Lava 600 — buttons, links, focus, sliders
+backgroundColor = "#F9F7F4"           # Oat Light — page ground
+secondaryBackgroundColor = "#EEEDE9"  # Oat Medium — sidebar, metrics, code, expanders
+textColor = "#1B3139"                 # Navy 800
+
+# Additional colors
+linkColor = "#FF3621"                 # Lava 600 (matches primary)
+linkUnderline = false
+codeTextColor = "#1B3139"             # Navy 800
+codeBackgroundColor = "#EEEDE9"       # Oat Medium
+
+# Borders and radii
+borderColor = "#DCE0E2"
+showWidgetBorder = true
+showSidebarBorder = true
+baseRadius = "md"
+buttonRadius = "md"
+
+# DataFrame styling
+dataframeHeaderBackgroundColor = "#EEEDE9"
+dataframeBorderColor = "#DCE0E2"
+
+# Chart palettes — categorical skips Lava (reserved for CTAs).
+# Order: Navy 600, Green 600, Yellow 600, Blue 600, Maroon 600, Navy 300, Lava 500.
+chartCategoricalColors = ["#1B5162", "#00A972", "#FFAB00", "#2272B4", "#98102A", "#C4CCD6", "#FF5F46"]
+chartSequentialColors = ["#F9F7F4", "#EEEDE9", "#C4CCD6", "#1B5162", "#143D4A", "#1B3139"]
+chartDivergingColors = ["#BD2B26", "#FF5F46", "#F9F7F4", "#C4CCD6", "#1B5162", "#1B3139"]
+
+# Semantic colors (st.success / st.error / st.warning / st.info)
+redColor = "#BD2B26"                  # Lava 700
+orangeColor = "#FFAB00"               # Yellow 600
+yellowColor = "#BA7B23"               # Yellow 700
+greenColor = "#00875C"                # Green 700
+blueColor = "#2272B4"                 # Blue 600
+violetColor = "#7457D8"
+grayColor = "#1B5162"                 # Navy 600
+
+# ---- Sidebar (light mode) ---------------------------------------------------
+# Stays on Oat Medium for the readable Databricks-card feel; switch to Navy 800
+# below if you want the alternative dark-rail look.
+
+[theme.sidebar]
+backgroundColor = "#EEEDE9"           # Oat Medium
+secondaryBackgroundColor = "#F9F7F4"  # Oat Light (nested surfaces)
+textColor = "#1B3139"                 # Navy 800
+linkColor = "#FF3621"                 # Lava 600
+showWidgetBorder = true
+
+# ---- Dark theme -------------------------------------------------------------
+
+[theme.dark]
+primaryColor = "#FF5F46"              # Lava 500 — brighter on dark for contrast
+backgroundColor = "#1B3139"           # Navy 800
+secondaryBackgroundColor = "#143D4A"  # Navy 700
+textColor = "#F9F7F4"                 # Oat Light
+linkColor = "#FF5F46"
+codeTextColor = "#F9F7F4"
+codeBackgroundColor = "#0B2026"       # Navy 900
+borderColor = "#1B5162"               # Navy 600
+dataframeBorderColor = "#1B5162"
+showWidgetBorder = true
+
+[theme.dark.sidebar]
+backgroundColor = "#0B2026"           # Navy 900
+secondaryBackgroundColor = "#143D4A"  # Navy 700
+textColor = "#F9F7F4"
+linkColor = "#FF5F46"

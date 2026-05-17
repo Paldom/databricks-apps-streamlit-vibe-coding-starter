@@ -1,6 +1,6 @@
 ---
 name: databricks-app-python
-description: "Builds Python-based Databricks applications using Dash, Streamlit, Gradio, Flask, FastAPI, or Reflex. Handles OAuth authorization (app and user auth), app resources, SQL warehouse and Lakebase connectivity, model serving integration, and deployment. Use when building Python web apps, dashboards, ML demos, or REST APIs for Databricks, or when the user mentions Streamlit, Dash, Gradio, Flask, FastAPI, Reflex, or Databricks app."
+description: "Builds Python-based Databricks applications using Dash, Streamlit, Gradio, Flask, FastAPI, or Reflex. Handles OAuth authorization (app and user auth), app resources, SQL warehouse and Lakebase connectivity, model serving integration, foundation model APIs, LLM integration, and deployment. Use when building Python web apps, dashboards, ML demos, or REST APIs for Databricks, or when the user mentions Streamlit, Dash, Gradio, Flask, FastAPI, Reflex, or Databricks app."
 ---
 
 # Databricks Python Application
@@ -36,10 +36,10 @@ Copy this checklist and verify each item:
 | Framework | Best For | app.yaml Command |
 |-----------|----------|------------------|
 | **Dash** | Production dashboards, BI tools, complex interactivity | `["python", "app.py"]` |
-| **Streamlit** | Rapid prototyping, data science apps, internal tools | `["streamlit", "run", "app.py", "--server.port", "8080", "--server.address", "0.0.0.0", "--server.headless", "true"]` |
+| **Streamlit** | Rapid prototyping, data science apps, internal tools | `["streamlit", "run", "app.py"]` |
 | **Gradio** | ML demos, model interfaces, chat UIs | `["python", "app.py"]` |
-| **Flask** | Custom REST APIs, lightweight apps, webhooks | `["gunicorn", "app:app", "-w", "4", "-b", "0.0.0.0:8080"]` |
-| **FastAPI** | Async APIs, auto-generated OpenAPI docs | `["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]` |
+| **Flask** | Custom REST APIs, lightweight apps, webhooks | `["gunicorn", "app:app", "-w", "4", "-b", "0.0.0.0:8000"]` |
+| **FastAPI** | Async APIs, auto-generated OpenAPI docs | `["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]` |
 | **Reflex** | Full-stack Python apps without JavaScript | `["reflex", "run", "--env", "prod"]` |
 
 **Default**: Recommend **Streamlit** for prototypes, **Dash** for production dashboards, **FastAPI** for APIs, **Gradio** for ML demos.
@@ -74,6 +74,8 @@ Copy this checklist and verify each item:
 
 **MCP tools**: Use [6-mcp-approach.md](6-mcp-approach.md) for managing app lifecycle via MCP tools — covers creating, deploying, monitoring, and deleting apps programmatically. (Keywords: MCP, create app, deploy app, app logs)
 
+**Foundation Models**: See [examples/llm_config.py](examples/llm_config.py) for calling Databricks foundation model APIs — covers OAuth M2M auth, OpenAI-compatible client wiring, and token caching. (Keywords: foundation model, LLM, OpenAI client, chat completions)
+
 ---
 
 ## Workflow
@@ -86,6 +88,7 @@ Copy this checklist and verify each item:
    **Using Lakebase (PostgreSQL)?** → Read [5-lakebase.md](5-lakebase.md)
    **Deploying to Databricks?** → Read [4-deployment.md](4-deployment.md)
    **Using MCP tools?** → Read [6-mcp-approach.md](6-mcp-approach.md)
+   **Calling foundation model/LLM APIs?** → See [examples/llm_config.py](examples/llm_config.py)
 
 2. Follow the instructions in the relevant guide
 3. For full code examples, browse https://apps-cookbook.dev/
@@ -170,7 +173,7 @@ class EntityIn(BaseModel):
 | **Resource not accessible** | Add resource via UI, verify SP has permissions, use `valueFrom` in app.yaml |
 | **Import error on deploy** | Add missing packages to `requirements.txt` (pre-installed packages don't need listing) |
 | **Lakebase app crashes on start** | `psycopg2`/`asyncpg` are NOT pre-installed — MUST add to `requirements.txt` |
-| **Port conflict** | Databricks Apps expects port 8080; configure your framework accordingly |
+| **Port conflict** | Apps must bind to `DATABRICKS_APP_PORT` env var (defaults to 8000). Never use 8080. Streamlit is auto-configured; for others, read the env var in code or use 8000 in app.yaml command |
 | **Streamlit: set_page_config error** | `st.set_page_config()` must be the first Streamlit command |
 | **Dash: unstyled layout** | Add `dash-bootstrap-components`; use `dbc.themes.BOOTSTRAP` |
 | **Slow queries** | Use Lakebase for transactional/low-latency; SQL warehouse for analytical queries |
@@ -198,3 +201,11 @@ class EntityIn(BaseModel):
 - **[Resources](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/resources)** — SQL warehouse, Lakebase, serving, secrets
 - **[app.yaml Reference](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/app-runtime)** — command and env config
 - **[System Environment](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/system-env)** — pre-installed packages, runtime details
+
+## Related Skills
+
+- **[databricks-app-apx](../databricks-app-apx/SKILL.md)** - full-stack apps with FastAPI + React
+- **[databricks-bundles](../databricks-bundles/SKILL.md)** - deploying apps via DABs
+- **[databricks-python-sdk](../databricks-python-sdk/SKILL.md)** - backend SDK integration
+- **[databricks-lakebase-provisioned](../databricks-lakebase-provisioned/SKILL.md)** - adding persistent PostgreSQL state
+- **[databricks-model-serving](../databricks-model-serving/SKILL.md)** - serving ML models for app integration

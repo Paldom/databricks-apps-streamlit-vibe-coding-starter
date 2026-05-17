@@ -4,6 +4,17 @@ Use MCP tools to create, deploy, and manage Databricks Apps programmatically. Th
 
 ---
 
+## manage_app - App Lifecycle Management
+
+| Action | Description | Required Params |
+|--------|-------------|-----------------|
+| `create_or_update` | Idempotent create, deploys if source_code_path provided | name |
+| `get` | Get app details (with optional logs) | name |
+| `list` | List all apps | (none, optional name_contains filter) |
+| `delete` | Delete an app | name |
+
+---
+
 ## Workflow
 
 ### Step 1: Write App Files Locally
@@ -22,68 +33,42 @@ my_app/
 ### Step 2: Upload to Workspace
 
 ```python
-# MCP Tool: upload_folder
-upload_folder(
-    local_folder="/path/to/my_app",
-    workspace_folder="/Workspace/Users/user@example.com/my_app"
+# MCP Tool: manage_workspace_files
+manage_workspace_files(
+    action="upload",
+    local_path="/path/to/my_app",
+    workspace_path="/Workspace/Users/user@example.com/my_app"
 )
 ```
 
-### Step 3: Create App
+### Step 3: Create and Deploy App
 
 ```python
-# MCP Tool: create_app
-result = create_app(
+# MCP Tool: manage_app (creates if needed + deploys)
+result = manage_app(
+    action="create_or_update",
     name="my-dashboard",
-    description="Customer analytics dashboard"
-)
-# Returns: {"name": "my-dashboard", "url": "https://..."}
-```
-
-### Step 4: Deploy
-
-```python
-# MCP Tool: deploy_app
-result = deploy_app(
-    app_name="my-dashboard",
+    description="Customer analytics dashboard",
     source_code_path="/Workspace/Users/user@example.com/my_app"
 )
-# Returns: {"deployment_id": "...", "status": "PENDING", ...}
+# Returns: {"name": "my-dashboard", "url": "...", "created": True, "deployment": {...}}
 ```
 
-### Step 5: Verify
+### Step 4: Verify
 
 ```python
-# MCP Tool: get_app
-app = get_app(name="my-dashboard")
-# Returns: {"name": "...", "url": "...", "status": "RUNNING", ...}
-
-# MCP Tool: get_app_logs
-logs = get_app_logs(app_name="my-dashboard")
-# Returns: {"logs": "...", ...}
+# MCP Tool: manage_app (get with logs)
+app = manage_app(action="get", name="my-dashboard", include_logs=True)
+# Returns: {"name": "...", "url": "...", "status": "RUNNING", "logs": "...", ...}
 ```
 
-### Step 6: Iterate
+### Step 5: Iterate
 
 1. Fix issues in local files
-2. Re-upload with `upload_folder`
-3. Re-deploy with `deploy_app`
-4. Check `get_app_logs` for errors
+2. Re-upload with `manage_workspace_files(action="upload", ...)`
+3. Re-deploy with `manage_app(action="create_or_update", ...)` (will update existing + deploy)
+4. Check `manage_app(action="get", name=..., include_logs=True)` for errors
 5. Repeat until app is healthy
-
----
-
-## Quick Reference: MCP Tools
-
-| Tool | Description |
-|------|-------------|
-| **`create_app`** | Create a new Databricks App |
-| **`get_app`** | Get app details and status |
-| **`list_apps`** | List all apps in the workspace |
-| **`deploy_app`** | Deploy app from workspace source path |
-| **`delete_app`** | Delete an app |
-| **`get_app_logs`** | Get app deployment and runtime logs |
-| **`upload_folder`** | Upload local folder to workspace (shared tool) |
 
 ---
 

@@ -1,225 +1,258 @@
-# Backend Code Patterns for APX
+# Backend Patterns
 
-Reference templates for backend development. **Only consult when writing backend code.**
+## Technology Stack
 
-## Pydantic Models (models.py)
+- **Framework:** FastAPI + Pydantic
+- **Package manager:** uv (never pip)
+- **Database ORM:** SQLModel (requires lakebase addon)
+- **Auth:** Databricks WorkspaceClient (service principal or OBO)
 
-### 3-Model Pattern
+## 3-Model Pattern
+
+Every API entity uses three Pydantic models:
+
+| Model       | Purpose                 | Example   |
+| ----------- | ----------------------- | --------- |
+| `Entity`    | Internal/database model | `Item`    |
+| `EntityIn`  | Input/request body      | `ItemIn`  |
+| `EntityOut` | Output/response model   | `ItemOut` |
 
 ```python
-from pydantic import BaseModel, Field
-from datetime import datetime
-from enum import Enum
-from typing import Optional
+from pydantic import BaseModel
 
-# Enum for status
-class EntityStatus(str, Enum):
-    STATUS_1 = "status_1"
-    STATUS_2 = "status_2"
+# Internal/DB model
+class Item(BaseModel):
+    id: str
+    name: str
+    description: str | None = None
+    created_at: datetime
 
-# Nested models
+# Input model — only fields the client sends
 class ItemIn(BaseModel):
     name: str
-    value: float = Field(gt=0)
+    description: str | None = None
 
+# Output model — what the API returns
 class ItemOut(BaseModel):
     id: str
     name: str
-    value: float
-    created_at: datetime
-
-# Main entity models
-class EntityIn(BaseModel):
-    """Input for creating entities"""
-    title: str
-    items: list[ItemIn]
-    notes: Optional[str] = None
-
-class EntityOut(BaseModel):
-    """Complete entity output"""
-    id: str
-    entity_number: str
-    title: str
-    status: EntityStatus
-    items: list[ItemOut]
-    total: float  # Computed field
-    notes: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
-
-class EntityListOut(BaseModel):
-    """Summary for list views (performance)"""
-    id: str
-    entity_number: str
-    title: str
-    status: EntityStatus
-    total: float
+    description: str | None = None
     created_at: datetime
 ```
 
-## API Routes (router.py)
+## CRUD Router Template
 
-### Basic CRUD Structure
+API routes **must** include `response_model` and `operation_id` for correct client generation.
+
+The `operation_id` maps directly to the generated TypeScript hook name:
+
+- `operation_id="listItems"` → `useListItems()` / `useListItemsSuspense()`
+- `operation_id="createItem"` → `useCreateItem()`
+- `operation_id="getItem"` → `useGetItem()` / `useGetItemSuspense()`
+- `operation_id="updateItem"` → `useUpdateItem()`
+- `operation_id="deleteItem"` → `useDeleteItem()`
 
 ```python
-from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException
-from .models import EntityIn, EntityOut, EntityListOut, EntityStatus
-from .config import conf
-from datetime import datetime
-import uuid
+from fastapi import APIRouter
 
-api = APIRouter(prefix=conf.api_prefix)
+router = APIRouter(prefix="/api")
 
-# In-memory storage (replace with database)
-_entities_db: dict[str, EntityOut] = {}
+@router.get("/items", response_model=list[ItemOut], operation_id="listItems")
+async def list_items(page: int = 1, page_size: int = 20):
+    ...
 
-# List all
-@api.get("/entities", response_model=list[EntityListOut], operation_id="listEntities")
-async def list_entities():
-    """Get all entities (summary view)"""
-    return [
-        EntityListOut(
-            id=e.id,
-            entity_number=e.entity_number,
-            title=e.title,
-            status=e.status,
-            total=e.total,
-            created_at=e.created_at,
-        )
-        for e in sorted(_entities_db.values(), key=lambda x: x.created_at, reverse=True)
-    ]
+@router.post("/items", response_model=ItemOut, operation_id="createItem")
+async def create_item(item: ItemIn):
+    ...
 
-# Get one
-@api.get("/entities/{entity_id}", response_model=EntityOut, operation_id="getEntity")
-async def get_entity(entity_id: str):
-    """Get a specific entity by ID"""
-    if entity_id not in _entities_db:
-        raise HTTPException(status_code=404, detail="Entity not found")
-    return _entities_db[entity_id]
+@router.get("/items/{item_id}", response_model=ItemOut, operation_id="getItem")
+async def get_item(item_id: str):
+    ...
 
-# Create
-@api.post("/entities", response_model=EntityOut, operation_id="createEntity")
-async def create_entity(entity_in: EntityIn):
-    """Create a new entity"""
-    entity_id = str(uuid.uuid4())
+@router.put("/items/{item_id}", response_model=ItemOut, operation_id="updateItem")
+async def update_item(item_id: str, item: ItemIn):
+    ...
 
-    # Process items
-    items = [
-        ItemOut(
-            id=str(uuid.uuid4()),
-            name=item.name,
-            value=item.value,
-            created_at=datetime.now()
-        )
-        for item in entity_in.items
-    ]
+@router.delete("/items/{item_id}", operation_id="deleteItem")
+async def delete_item(item_id: str):
+    ...
+```
 
-    # Calculate total
-    total = sum(item.value for item in items)
+## SDK Listing with Pagination
 
-    entity = EntityOut(
-        id=entity_id,
-        entity_number=f"ENT-{datetime.now().strftime('%Y%m%d')}-{len(_entities_db) + 1:04d}",
-        title=entity_in.title,
-        status=EntityStatus.STATUS_1,
-        items=items,
-        total=total,
-        notes=entity_in.notes,
-        created_at=datetime.now(),
-        updated_at=datetime.now(),
+Databricks SDK listing methods (`ws.jobs.list()`, `ws.clusters.list()`, etc.) return **lazy iterators** that handle pagination internally. To expose paginated REST endpoints, collect items into a page-sized slice on the backend.
+
+### Paginated Response Model
+
+```python
+from pydantic import BaseModel
+
+class PaginatedResponse[T](BaseModel):
+    """Generic paginated response wrapper."""
+    items: list[T]
+    next_page_token: str | None = None
+```
+
+### Paginated SDK List Endpoint
+
+```python
+from itertools import islice
+from databricks.sdk.service.jobs import BaseJob
+from .core import Dependencies, create_router
+from .models import PaginatedResponse
+
+router = create_router()
+
+@router.get(
+    "/jobs",
+    response_model=PaginatedResponse[BaseJob],
+    operation_id="listJobs",
+)
+def list_jobs(
+    ws: Dependencies.Client,
+    page_size: int = 20,
+    page_token: str | None = None,
+):
+    """List jobs with cursor-based pagination wrapping the SDK iterator."""
+    iterator = ws.jobs.list()
+
+    # If resuming from a cursor, skip past it
+    if page_token:
+        for job in iterator:
+            if str(job.job_id) == page_token:
+                break
+
+    items = list(islice(iterator, page_size))
+    next_token = str(items[-1].job_id) if len(items) == page_size else None
+    return PaginatedResponse(items=items, next_page_token=next_token)
+```
+
+### Key Rules
+
+- **Always use SDK methods** (`ws.jobs.list()`, `ws.clusters.list()`) — never call the REST API directly via `requests`, `httpx`, or `ws.api_client.do()`.
+- SDK listing methods return **iterators** that auto-paginate. You do not need to pass `page_token` to the SDK — only to your own FastAPI endpoint.
+- Use `itertools.islice` to take a page of results from the SDK iterator.
+- The `page_token` is an opaque cursor the frontend passes back. Use an item's unique ID (e.g. `job_id`).
+- **SDK dataclasses are Pydantic-compatible** — use them directly in `response_model` (e.g. `PaginatedResponse[BaseJob]`) or compose them into custom models:
+  ```python
+  class MyResponse(BaseModel):
+      payload: BaseJob
+  ```
+- Use the `docs` MCP tool to look up the exact SDK method signature before writing code.
+
+## SSE Streaming Endpoint
+
+For chat, agent, or real-time features, use Server-Sent Events (SSE) with FastAPI's `StreamingResponse`.
+
+### Streaming Response Model
+
+```python
+from fastapi.responses import StreamingResponse
+
+@router.post("/chat", operation_id="chat")
+async def chat(
+    request: ChatRequest,
+    ws: Dependencies.Client,
+) -> StreamingResponse:
+    """Stream chat responses as Server-Sent Events."""
+
+    async def event_stream():
+        # Replace with your LLM/agent streaming call
+        async for chunk in my_agent.run_stream(request.message):
+            yield f"data: {chunk}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
-
-    _entities_db[entity_id] = entity
-    return entity
-
-# Update
-@api.patch("/entities/{entity_id}", response_model=EntityOut, operation_id="updateEntity")
-async def update_entity(entity_id: str, entity_update: EntityIn):
-    """Update an entity"""
-    if entity_id not in _entities_db:
-        raise HTTPException(status_code=404, detail="Entity not found")
-
-    entity = _entities_db[entity_id]
-    # Apply updates
-    entity.title = entity_update.title
-    entity.updated_at = datetime.now()
-
-    return entity
-
-# Delete
-@api.delete("/entities/{entity_id}", operation_id="deleteEntity")
-async def delete_entity(entity_id: str):
-    """Delete an entity"""
-    if entity_id not in _entities_db:
-        raise HTTPException(status_code=404, detail="Entity not found")
-
-    del _entities_db[entity_id]
-    return {"message": "Entity deleted successfully"}
 ```
 
-### Mock Data Initialization
+### Key Rules
+
+- Use `StreamingResponse` with `media_type="text/event-stream"` — not a regular JSON response.
+- Each SSE event must be formatted as `data: <payload>\n\n` (double newline).
+- Send `data: [DONE]\n\n` as the final event to signal stream completion.
+- Set `Cache-Control: no-cache` and `X-Accel-Buffering: no` headers to prevent buffering.
+- SSE endpoints use `POST` (not `GET`) when they accept a request body.
+- Generated React Query hooks **do not work** for SSE — the frontend must use manual `fetch()` + `ReadableStream` (see [Frontend Patterns](frontend-patterns.md#sse-streaming-chatagent)).
+- Always include `operation_id` for OpenAPI documentation even though the generated hook won't be used for streaming.
+
+## Dependencies and Dependency Injection
+
+The `Dependencies` class in `src/<app>/backend/core.py` provides typed FastAPI dependencies. **Always use these instead of manually creating clients or accessing `request.app.state`.**
+
+| Dependency              | Type              | Description                                                                        |
+| ----------------------- | ----------------- | ---------------------------------------------------------------------------------- |
+| `Dependencies.Client`     | `WorkspaceClient` | Databricks client using app-level service principal credentials                    |
+| `Dependencies.UserClient` | `WorkspaceClient` | Databricks client authenticated on behalf of the current user (requires OBO token) |
+| `Dependencies.Config`     | `AppConfig`       | Application configuration loaded from environment variables                        |
+| `Dependencies.Session`    | `Session`         | SQLModel database session, scoped to request (requires lakebase addon)             |
+
+### Usage in Route Handlers
 
 ```python
-def _init_mock_data():
-    """Initialize with sample data"""
-    if _entities_db:
-        return
+from .core import Dependencies, create_router
 
-    mock_data = [
-        {
-            "title": "Sample Entity 1",
-            "status": EntityStatus.STATUS_1,
-            "items": [
-                {"name": "Item A", "value": 100.0},
-                {"name": "Item B", "value": 50.0},
-            ],
-            "notes": "Sample note",
-        },
-        # Add 2-3 more samples
-    ]
+router = create_router()
 
-    for idx, data in enumerate(mock_data):
-        entity_id = str(uuid.uuid4())
+# Service principal client
+@router.get("/clusters", response_model=list[ClusterOut], operation_id="listClusters")
+def list_clusters(ws: Dependencies.Client):
+    return ws.clusters.list()
 
-        items = [
-            ItemOut(
-                id=str(uuid.uuid4()),
-                name=item["name"],
-                value=item["value"],
-                created_at=datetime.now()
-            )
-            for item in data["items"]
-        ]
+# User-scoped client (OBO)
+@router.get("/me", response_model=UserOut, operation_id="currentUser")
+def me(user_ws: Dependencies.UserClient):
+    return user_ws.current_user.me()
 
-        entity = EntityOut(
-            id=entity_id,
-            entity_number=f"ENT-{datetime.now().strftime('%Y%m%d')}-{idx + 1:04d}",
-            title=data["title"],
-            status=data["status"],
-            items=items,
-            total=sum(item.value for item in items),
-            notes=data.get("notes"),
-            created_at=datetime.now(),
-            updated_at=datetime.now(),
-        )
+# Application config
+@router.get("/settings", response_model=AppSettingsOut, operation_id="getSettings")
+def get_settings(config: Dependencies.Config):
+    return AppSettingsOut(app_name=config.app_name)
 
-        _entities_db[entity_id] = entity
-
-# Call at module level
-_init_mock_data()
+# Database session (requires lakebase addon)
+@router.get("/orders", response_model=list[OrderOut], operation_id="getOrders")
+def get_orders(session: Dependencies.Session):
+    return session.exec(select(Order)).all()
 ```
 
-## Naming Conventions
+## Extending AppConfig
 
-### operation_id → Frontend Hook Name
+Add custom fields to `AppConfig` in `core.py`. Fields are populated from environment variables with `{APP_SLUG}_` prefix:
 
-| operation_id | Generated Hook |
-|--------------|----------------|
-| `listEntities` | `useListEntities()`, `useListEntitiesSuspense()` |
-| `getEntity` | `useGetEntity(id)`, `useGetEntitySuspense(id)` |
-| `createEntity` | `useCreateEntity()` |
-| `updateEntity` | `useUpdateEntity()` |
-| `deleteEntity` | `useDeleteEntity()` |
+```python
+class AppConfig(BaseSettings):
+    app_name: str = Field(default=app_name)
+    my_setting: str = Field(default="value")  # env var: {APP_SLUG}_MY_SETTING
+```
 
-**Pattern**: Verb + EntityName in camelCase
+## Custom Lifespan
+
+Use the `lifespan` parameter in `create_app` for startup/shutdown logic. The default lifespan (config + workspace client) runs first:
+
+```python
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+
+@asynccontextmanager
+async def custom_lifespan(app: FastAPI):
+    # app.state.config and app.state.workspace_client already available
+    app.state.my_resource = await init_something(app.state.config)
+    yield
+
+app = create_app(routers=[router], lifespan=custom_lifespan)
+```
+
+## Project Layout
+
+```
+src/<app>/backend/
+├── app.py             # FastAPI entrypoint: app = create_app(routers=[router], lifespan=...)
+├── router.py          # API routes with operation_id
+├── models.py          # Pydantic models (Entity, EntityIn, EntityOut)
+└── core.py            # Dependency class, AppConfig, create_router, create_app
+```
+
+Backend serves the frontend at `/` and the API at `/api`.
