@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "resources": [
+    {
+      "type": "catalog",
+      "name": "demo",
+      "id": "demo",
+      "created_at": "2026-05-17T20:31:08.162185+00:00",
+      "updated_at": "2026-05-17T20:31:08.162185+00:00"
+    },
+    {
+      "type": "schema",
+      "name": "demo.nyctaxi",
+      "id": "demo.nyctaxi",
+      "created_at": "2026-05-17T20:31:23.315904+00:00",
+      "updated_at": "2026-05-17T20:31:23.315904+00:00"
+    },
+    {
+      "type": "genie_space",
+      "name": "NYC Taxi Trips Genie",
+      "id": "01f152305d531fc9b1c8e70b439bfa9e",
+      "created_at": "2026-05-17T20:38:31.464290+00:00",
+      "updated_at": "2026-05-17T20:38:31.464290+00:00"
+    }
+  ]
+}
