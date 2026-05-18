@@ -43,6 +43,13 @@
       "id": "demo.knowledge_assistant.docs",
       "created_at": "2026-05-18T19:20:54.301858+00:00",
       "updated_at": "2026-05-18T19:20:54.301858+00:00"
+    },
+    {
+      "type": "multi_agent_supervisor",
+      "name": "enterprise-supervisor-agent",
+      "id": "ccec4a8f-7c68-43fc-8367-fc15f5bfdc93",
+      "created_at": "2026-05-18T20:30:50.477155+00:00",
+      "updated_at": "2026-05-18T20:30:50.477155+00:00"
     }
   ]
 }

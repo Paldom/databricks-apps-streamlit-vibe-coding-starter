@@ -53,6 +53,11 @@ env:
   - name: KA_ENDPOINT_NAME
     value: "ka-fa945a0b-endpoint"
 
+  # Supervisor Agent (Agent Bricks) — routes between the Genie Space + KA.
+  # Used by 7_Supervisor.py.
+  - name: SUPERVISOR_ENDPOINT_NAME
+    value: "mas-ccec4a8f-endpoint"
+
   # ===== Business Intelligence =====
   # Dashboard - embed URL for the NYC Taxi AI/BI dashboard
   # (Workspace → Dashboards → Share → Embed iframe).
