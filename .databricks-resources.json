@@ -21,6 +21,14 @@
       "id": "01f152305d531fc9b1c8e70b439bfa9e",
       "created_at": "2026-05-17T20:38:31.464290+00:00",
       "updated_at": "2026-05-17T20:38:31.464290+00:00"
+    },
+    {
+      "type": "dashboard",
+      "name": "NYC Taxi Trips Dashboard",
+      "id": "01f152dc97b912a6afa69f29d7e043de",
+      "created_at": "2026-05-18T17:11:25.160276+00:00",
+      "updated_at": "2026-05-18T17:11:25.160276+00:00",
+      "url": "https://adb-1272983411735654.14.azuredatabricks.net/sql/dashboardsv3/01f152dc97b912a6afa69f29d7e043de"
     }
   ]
 }

@@ -41,9 +41,10 @@ env:
   #   valueFrom: genie-space           # Add Genie Space resource with key: genie-space
 
   # ===== Business Intelligence =====
-  # Dashboard - embed URL (get from Dashboard → Share → Embed iframe)
-  # - name: DASHBOARD_EMBED_URL
-  #   value: "https://<workspace-host>/embed/dashboardsv3/<dashboard-id>"  # Update with your dashboard embed URL
+  # Dashboard - embed URL for the NYC Taxi AI/BI dashboard
+  # (Workspace → Dashboards → Share → Embed iframe).
+  - name: DASHBOARD_EMBED_URL
+    value: "https://adb-1272983411735654.14.azuredatabricks.net/embed/dashboardsv3/01f152dc97b912a6afa69f29d7e043de"
 
   # ===== Workflows =====
   # Job - for triggering workflows
