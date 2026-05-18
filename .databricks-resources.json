@@ -29,6 +29,20 @@
       "created_at": "2026-05-18T17:11:25.160276+00:00",
       "updated_at": "2026-05-18T17:11:25.160276+00:00",
       "url": "https://adb-1272983411735654.14.azuredatabricks.net/sql/dashboardsv3/01f152dc97b912a6afa69f29d7e043de"
+    },
+    {
+      "type": "schema",
+      "name": "demo.knowledge_assistant",
+      "id": "demo.knowledge_assistant",
+      "created_at": "2026-05-18T19:20:30.665045+00:00",
+      "updated_at": "2026-05-18T19:20:30.665045+00:00"
+    },
+    {
+      "type": "volume",
+      "name": "demo.knowledge_assistant.docs",
+      "id": "demo.knowledge_assistant.docs",
+      "created_at": "2026-05-18T19:20:54.301858+00:00",
+      "updated_at": "2026-05-18T19:20:54.301858+00:00"
     }
   ]
 }

@@ -9,4 +9,5 @@ dependencies = [
     "databricks-sql-connector>=4.2.6",
     "databricks-sdk>=0.108.0",
     "psycopg[binary,pool]>=3.2",
+    "requests>=2.31",
 ]

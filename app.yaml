@@ -48,6 +48,11 @@ env:
   - name: GENIE_SPACE_URL
     value: "https://adb-1272983411735654.14.azuredatabricks.net/embed/genie/rooms/01f152305d531fc9b1c8e70b439bfa9e"
 
+  # Knowledge Assistant (Agent Bricks) — serving endpoint for the
+  # Northwind PDFs page (6_Knowledge_Assistant.py).
+  - name: KA_ENDPOINT_NAME
+    value: "ka-fa945a0b-endpoint"
+
   # ===== Business Intelligence =====
   # Dashboard - embed URL for the NYC Taxi AI/BI dashboard
   # (Workspace → Dashboards → Share → Embed iframe).
