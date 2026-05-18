@@ -8,4 +8,5 @@ dependencies = [
     "pandas>=2.3.3",
     "databricks-sql-connector>=4.2.6",
     "databricks-sdk>=0.108.0",
+    "psycopg[binary,pool]>=3.2",
 ]

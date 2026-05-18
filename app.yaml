@@ -17,6 +17,16 @@ env:
   # - name: OLTP_CONNECTION_STRING
   #   value: "postgresql://user:pass@host:5432/db"  # Or retrieve from secrets
 
+  # Lakebase synced table — page reads from the Postgres-side replica.
+  # PGHOST / PGDATABASE / PGPORT / PGSSLMODE / PGUSER are auto-injected by
+  # Databricks Apps when the `lakebase-db` resource is bound to the app.
+  - name: LAKEBASE_INSTANCE_NAME
+    value: "streamlit-demo-lakebase"      # Must match databricks.yml var.lakebase_instance_name
+  - name: SYNCED_SCHEMA
+    value: "nyctaxi"
+  - name: SYNCED_TABLE
+    value: "trips_synced"
+
   # ===== AI/ML =====
   # Model Serving - for ML inference
   # - name: MODEL_SERVING_ENDPOINT

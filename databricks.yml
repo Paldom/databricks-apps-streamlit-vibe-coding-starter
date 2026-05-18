@@ -23,7 +23,62 @@ variables:
   user_group_app:
     description: "User group that receives CAN_USE on the app and on per-page resources."
 
+  # ---- Lakebase (Provisioned-schema DAB resources; the workspace creates the
+  # ---- underlying instance as Autoscale, but the API + bindings stay backward
+  # ---- compatible with the legacy `database_instances` / `synced_database_tables`
+  # ---- / `apps.resources.database` shape).
+  lakebase_instance_name:
+    description: "Lakebase Provisioned database instance name (DNS-safe, hyphens OK)."
+  lakebase_catalog_name:
+    description: "UC catalog name that registers the Lakebase instance (underscores, no hyphens)."
+  sync_pipeline_storage_catalog:
+    description: "Standard UC catalog where the sync pipeline stores checkpoints + event logs."
+    default: demo
+  sync_pipeline_storage_schema:
+    description: "Standard UC schema for the sync pipeline storage."
+    default: nyctaxi
+
 resources:
+  # ---- Lakebase database instance (legacy `database_instances` schema).
+  # In 2026+ workspaces this is created as an Autoscale project under the hood,
+  # but the DAB resource + Apps `database:` binding remain backward compatible.
+  database_instances:
+    lakebase:
+      name: ${var.lakebase_instance_name}
+      capacity: CU_1
+
+  # UC catalog that registers the Lakebase database so synced tables can land in UC.
+  database_catalogs:
+    lakebase_catalog:
+      name: ${var.lakebase_catalog_name}
+      database_instance_name: ${resources.database_instances.lakebase.name}
+      database_name: databricks_postgres
+      create_database_if_not_exists: true
+
+  # SNAPSHOT-mode sync from the UC source table → Lakebase Postgres.
+  # Source is the materialised table on top of demo.nyctaxi.v_trips_genie
+  # (see docs/plans/0_D_genie_setup.md).
+  #
+  # The `name` references `resources.database_catalogs.lakebase_catalog.name`
+  # rather than `var.lakebase_catalog_name` so Terraform infers a dependency
+  # on the catalog resource and creates it BEFORE the synced table. Without
+  # the reference, both resources race in parallel and the synced table fails
+  # with "Catalog '<name>' does not exist".
+  synced_database_tables:
+    trips_synced:
+      name: ${resources.database_catalogs.lakebase_catalog.name}.nyctaxi.trips_synced
+      database_instance_name: ${resources.database_instances.lakebase.name}
+      logical_database_name: databricks_postgres
+      spec:
+        source_table_full_name: demo.nyctaxi.trips_for_sync
+        primary_key_columns:
+          - trip_id
+        scheduling_policy: SNAPSHOT
+        create_database_objects_if_missing: true
+        new_pipeline_spec:
+          storage_catalog: ${var.sync_pipeline_storage_catalog}
+          storage_schema: ${var.sync_pipeline_storage_schema}
+
   apps:
     streamlit-demo:
       name: streamlit-demo-2026-05-17
@@ -33,7 +88,16 @@ resources:
           group_name: ${var.user_group_manage}
         - level: CAN_USE
           group_name: ${var.user_group_app}
-      resources: []   # per-page plans append entries here (SQL warehouses, Genie spaces, etc.)
+      resources:
+        # Lakebase database binding — Databricks Apps injects PGHOST / PGDATABASE /
+        # PGPORT / PGSSLMODE / PGUSER for this resource and creates a Postgres role
+        # for the app SP with CONNECT + CREATE. Table-level SELECT still needs a
+        # one-off GRANT in Postgres (see the verification section below).
+        - name: lakebase-db
+          database:
+            instance_name: ${resources.database_instances.lakebase.name}
+            database_name: databricks_postgres
+            permission: CAN_CONNECT_AND_CREATE
 
 # Files synced to the workspace alongside the app source.
 # Excludes keep deploys small and prevent doc/CI files from cluttering the app folder.
@@ -63,3 +127,7 @@ targets:
     variables:
       user_group_manage: "<your-admin-group>"
       user_group_app: "<your-users-group>"
+      lakebase_instance_name: "streamlit-demo-lakebase"
+      lakebase_catalog_name: "streamlit_demo_lakebase"
+      sync_pipeline_storage_catalog: "demo"
+      sync_pipeline_storage_schema: "nyctaxi"
