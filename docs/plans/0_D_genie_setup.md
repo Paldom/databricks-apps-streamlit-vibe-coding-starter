@@ -4,6 +4,8 @@ Provisioning plan for a Databricks Genie Space backed by a curated copy of `samp
 
 > **Prerequisite.** Complete `0_A_initial_setup.md` first — this plan assumes `databricks.yml`, the App, and the deploy SP (or your user) have workspace access. Brand-agnostic; does not depend on `0_B_design_system.md`.
 
+> **Agent automation shortcut.** For from-scratch, payload-driven Genie creation (no dependency on exporting/cloning an existing space), use `0_E_genie_payload_schema_and_execution.md` alongside this plan. It defines reusable `serialized_space` + ACL payload contracts and executable CLI steps.
+
 > **Source-of-truth principle.** Don't point Genie at `samples.nyctaxi.trips` directly: the `samples` catalog is read-only, so you can't attach UC comments, statistics, synonyms, or SQL expressions to it. Instead clone it into a writable catalog (`demo.nyctaxi.trips_raw`), build one curated business-facing view (`demo.nyctaxi.v_trips_genie`) and attach **only the view** to Genie. The raw table stays around for ad-hoc query and audit, but Genie never sees it directly.
 
 > **DAB-first.** The repo's `databricks.yml` now owns the schema (`demo_${monogram}.nyctaxi`) and the source-table comments via a `resources.schemas` block with grants. Tables and views (`trips_raw`, `v_trips_genie`, `trips_for_sync`) live in `scripts/bootstrap.py` because DAB has no `tables` / `views` resource type today. The **Genie Space itself is still created manually** — Agent Bricks artefacts are not in the bundle schema yet. The imperative `manage_uc_objects` + `execute_sql` path in §3.2 / §3.3 / §3.4 below remains documented as an **optional alternative** for workspaces without DAB tooling.
@@ -81,7 +83,7 @@ NYC Taxi Trips Genie               ← Genie Space (id captured at creation)
 2. **Raw clone + comments** — `CREATE TABLE IF NOT EXISTS … DEEP CLONE`, then `ANALYZE TABLE`, then `COMMENT ON` + `ALTER TABLE … ALTER COLUMN … COMMENT`.
 3. **Curated view** — single `CREATE OR REPLACE VIEW` with per-column comments.
 4. **Profile validation** — one query confirming row counts and date range, plus the suspicious-records counters.
-5. **Genie Space basics** — `create_or_update_genie` (MCP), or *New Genie Space* in the UI: attach the view, set name, description, warehouse, sample questions.
+5. **Genie Space basics** — `create_or_update_genie` (MCP), or *New Genie Space* in the UI: attach the view, set name, description, warehouse, sample questions. For a reusable CLI/JSON payload workflow that future agents can run directly, see `0_E_genie_payload_schema_and_execution.md`.
 6. **Deeper Genie config** — synonyms, prompt matching, text instructions, SQL expressions, example SQL, parameterised examples, benchmarks. This part is **UI-only today** (or via `serialized_space` JSON); the MCP `create_or_update_genie` tool does not expose these fields directly. The Claude Code prompt in §3.8 walks the reader through it.
 7. **Share + monitor** — grant `CAN RUN` / `SELECT`, then iterate using Genie's Monitor tab and the benchmarks.
 
@@ -270,6 +272,8 @@ FROM demo.nyctaxi.v_trips_genie;
 Expected for the public `samples.nyctaxi.trips` snapshot: `rows_total = 21,932`, `rows_valid = 21,770`, range `2016-01-01 .. 2016-02-29`, `avg_valid_fare_usd ≈ 12.32`, `avg_valid_distance_miles ≈ 2.87`. If your numbers differ wildly, the upstream sample changed — update your benchmarks.
 
 ### 3.6 Phase 5 — Create the Genie Space (basics)
+
+If you are automating this step with agents and want a reusable, from-scratch payload flow, follow `0_E_genie_payload_schema_and_execution.md` (it includes validated `serialized_space` and permission payload templates plus executable commands).
 
 Via Databricks MCP / Claude Code, one call:
 
