@@ -165,6 +165,10 @@ Expected with the public `samples.nyctaxi.trips` snapshot cloned into `demo`: `t
 
 The dashboard is a single AI/BI dashboard object (`.lvdash.json` under the workspace). It declares six datasets and a 12-column `GRID_V1` layout with 13 widgets. The full JSON shape is reproduced under §4.2 (Reference dashboard JSON).
 
+**Critical JSON syntax requirement (Lakeview parser).**
+For this dashboard shape, each dataset should provide SQL as **one complete string** inside `queryLines` (for example: `"queryLines": ["SELECT ... FROM ... WHERE ..."]`).
+Do **not** split a dataset SQL statement across many `queryLines` entries unless you have validated that your runtime preserves whitespace between entries. Some Lakeview paths concatenate entries without separators, which can produce invalid SQL tokens like `avg_duration_minFROM` and `v_trips_genieWHERE`.
+
 Three paths to create it, in order of preference:
 
 1. **MCP-driven (recommended)** — paste the §3.4 prompt into Claude Code; the assistant builds + publishes the dashboard using `manage_dashboard(action="create_or_update", publish=True, embed_credentials=True, …)` after re-testing every dataset query.
@@ -291,12 +295,12 @@ import json
 
 dashboard = {
     "datasets": [
-        {"name": "summary",        "displayName": "Summary KPIs",          "queryLines": ["<see §3.2 summary>"]},
-        {"name": "by_zip",         "displayName": "Trips by Pickup ZIP",   "queryLines": ["<see §3.2 by_zip>"]},
-        {"name": "by_hour",        "displayName": "Trips and Avg Fare by Hour", "queryLines": ["<see §3.2 by_hour>"]},
-        {"name": "by_distance",    "displayName": "Distance Distribution", "queryLines": ["<see §3.2 by_distance>"]},
-        {"name": "by_time_of_day", "displayName": "Trips by Time of Day",  "queryLines": ["<see §3.2 by_time_of_day>"]},
-        {"name": "top_routes",     "displayName": "Top Routes",            "queryLines": ["<see §3.2 top_routes>"]},
+    {"name": "summary",        "displayName": "Summary KPIs",          "queryLines": ["<one complete SQL statement from §3.2 summary>"]},
+    {"name": "by_zip",         "displayName": "Trips by Pickup ZIP",   "queryLines": ["<one complete SQL statement from §3.2 by_zip>"]},
+    {"name": "by_hour",        "displayName": "Trips and Avg Fare by Hour", "queryLines": ["<one complete SQL statement from §3.2 by_hour>"]},
+    {"name": "by_distance",    "displayName": "Distance Distribution", "queryLines": ["<one complete SQL statement from §3.2 by_distance>"]},
+    {"name": "by_time_of_day", "displayName": "Trips by Time of Day",  "queryLines": ["<one complete SQL statement from §3.2 by_time_of_day>"]},
+    {"name": "top_routes",     "displayName": "Top Routes",            "queryLines": ["<one complete SQL statement from §3.2 top_routes>"]},
     ],
     "pages": [{
         "name": "overview",
@@ -347,6 +351,8 @@ counter_kpi = {
 #  - The `name` inside query.fields MUST exactly match `fieldName` in encodings.
 #  - version 2 for counter/table/textbox; version 3 for bar/line/pie.
 #  - disaggregated=True when the SQL is already aggregated (every dataset here).
+#  - Use exactly one full SQL statement per dataset `queryLines` entry.
+#    Avoid multi-entry queryLines unless whitespace-preserving behavior is verified.
 #  - Every page row sums to width=12 exactly. No gaps.
 #  - Page must include "layoutVersion": "GRID_V1".
 
@@ -486,5 +492,6 @@ Three swap recipes, in order of frequency:
 - **Classic SQL warehouse.** AI/BI dashboards refuse to connect. Use Pro or Serverless.
 - **Hardcoding the URL inside the page.** Keep it in `app.yaml` so dev/staging/prod can point at different dashboards without code edits.
 - **Skipping query validation before building the dashboard JSON.** Widget errors after deploy are opaque ("Invalid widget definition"); a failing `execute_sql` round-trip up front saves an hour of debugging.
+- **Splitting dataset SQL across multiple `queryLines` entries without enforced whitespace.** Some Lakeview parser paths join entries directly, causing syntax errors such as `avg_duration_minFROM` or `...v_trips_genieWHERE...`. Prefer one complete SQL statement in a single `queryLines` string.
 - **Mixing `disaggregated:true` and aggregation expressions in the same widget query.** Either pre-aggregate in the dataset SQL and set `disaggregated:true` (this plan's pattern), or leave raw rows in the dataset and use `SUM(...)` / `AVG(...)` aggregations in `query.fields[].expression`. Don't do both — Lakeview will double-aggregate or error out.
 - **Forgetting to republish after editing dataset SQL.** Editor-only saves don't update the embedded view. Always re-run `manage_dashboard(action="publish", …)` after a dataset change.
