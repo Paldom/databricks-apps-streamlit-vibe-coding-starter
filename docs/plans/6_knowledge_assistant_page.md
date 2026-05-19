@@ -12,6 +12,8 @@ Page-specific plan for `pages/6_Knowledge_Assistant.py` — a Streamlit chat UI 
 > 3. The Postgres-style `databricks api patch /api/2.0/permissions/serving-endpoints/<X>` needs the endpoint **ID** (UUID hash), **not** the endpoint **name**. Look up via `databricks serving-endpoints get <name>`.
 > 4. Ingestion of a fresh knowledge source takes **5–15 minutes** even for tiny PDFs. The page handles the in-flight state with a banner.
 
+> **Naming convention — shared catalog, monogrammed schema.** UC objects this plan creates live in the **shared `demo` catalog** (pre-existing), inside the operator's per-monogram schema. The KA display name is `Northwind Knowledge Assistant (${monogram})`, the UC volume backing the PDFs is `demo.knowledge_assistant_${monogram}.docs`, and the serving endpoint name will be auto-generated as `ka-<hash>-endpoint` by the Agent Bricks API — record it after creation. **All `demo.knowledge_assistant.…` literals in the snippets below are placeholders — substitute `demo.knowledge_assistant_${monogram}.…` everywhere when running for real.** This plan never creates a catalog — `CREATE_CATALOG ON METASTORE` is NOT required.
+
 ---
 
 ## 1. Parameters to set
@@ -37,10 +39,10 @@ Page-specific knobs; app-level values are reused from `0_A_initial_setup.md` §1
 - **`KA_ID`** (captured after create) = `__________________`
 - **`KA_ENDPOINT_NAME`** (captured after create — goes in `app.yaml`) = `__________________`
 - **`KA_ENDPOINT_ID`** (lookup after deploy; needed for the permissions PATCH) = `__________________`
-- **`SOURCE_VOLUME_CATALOG`** = `demo`
-- **`SOURCE_VOLUME_SCHEMA`** = `knowledge_assistant`
+- **`SOURCE_VOLUME_CATALOG`** = `demo` *(shared — do not create)*
+- **`SOURCE_VOLUME_SCHEMA`** = `knowledge_assistant_${monogram}`
 - **`SOURCE_VOLUME_NAME`** = `docs`
-- **`SOURCE_VOLUME_PATH`** (computed) = `/Volumes/demo/knowledge_assistant/docs`
+- **`SOURCE_VOLUME_PATH`** (computed) = `/Volumes/demo/knowledge_assistant_${monogram}/docs`
 - **`app_sp_client_id`** (from `databricks apps get <app_name> -o json`) = `__________________`
 - **Page title** = `Knowledge Assistant`
 - **Page icon** = `:material/menu_book:`
@@ -119,21 +121,25 @@ Response (OpenAI Responses-API shape):
 
 ### 3.2 Stage the documents in a UC volume
 
+The `demo` catalog is **shared and pre-existing** — do not create it. Only the per-operator schema + volume below are created here.
+
 ```bash
-# Schema
-databricks schemas create knowledge_assistant demo \
-  --comment "Source documents for the Northwind Knowledge Assistant."
+# Per-operator schema inside the shared `demo` catalog
+databricks schemas create knowledge_assistant_${monogram} demo \
+  --comment "Source documents for the Northwind Knowledge Assistant (${monogram})."
 
 # Volume (managed)
-databricks volumes create demo knowledge_assistant docs MANAGED \
+databricks volumes create demo knowledge_assistant_${monogram} docs MANAGED \
   --comment "Northwind Robotics source PDFs for KA ingestion."
 
 # Upload all PDFs from this repo's resources/ folder.
 # (Adjust the glob if your source folder isn't ./resources/.)
-databricks fs cp -r ./resources/*.pdf dbfs:/Volumes/demo/knowledge_assistant/docs/
+databricks fs cp -r ./resources/*.pdf dbfs:/Volumes/demo/knowledge_assistant_${monogram}/docs/
 ```
 
 Equivalent MCP path: `manage_uc_objects(action=create, object_type=schema, …)`, `manage_uc_objects(action=create, object_type=volume, …)`, `manage_volume_files(action=upload, volume_path=…, local_path=./resources/*.pdf)`.
+
+> **Never run `databricks catalogs create --name demo`.** The shared `demo` catalog is provisioned once by a metastore admin. If it doesn't exist, escalate to the metastore admin rather than granting `CREATE_CATALOG` to the operator group.
 
 ### 3.3 Create the Knowledge Assistant
 
@@ -178,10 +184,10 @@ The `create-knowledge-source` CLI sub-command has a footgun: it rejects position
 cat > /tmp/ka_source.json <<EOF
 {
   "display_name": "Northwind PDFs",
-  "description": "Employee Handbook, Travel & Expense Policy, Sustainability Report 2024 — three governed PDFs under /Volumes/demo/knowledge_assistant/docs.",
+  "description": "Employee Handbook, Travel & Expense Policy, Sustainability Report 2024 — three governed PDFs under /Volumes/demo/knowledge_assistant_${monogram}/docs.",
   "source_type": "files",
   "files": {
-    "path": "/Volumes/demo/knowledge_assistant/docs"
+    "path": "/Volumes/demo/knowledge_assistant_${monogram}/docs"
   }
 }
 EOF
@@ -231,30 +237,32 @@ Provision the Northwind Knowledge Assistant per
 docs/plans/1_F_knowledge_assistant_page.md.
 
 Inputs from §1.1 + 0_A_initial_setup.md §1.1:
-- SOURCE_VOLUME_CATALOG: demo
-- SOURCE_VOLUME_SCHEMA:  knowledge_assistant
+- SOURCE_VOLUME_CATALOG: demo                                (shared — do NOT create)
+- SOURCE_VOLUME_SCHEMA:  knowledge_assistant_${monogram}     (per-operator — you create this)
 - SOURCE_VOLUME_NAME:    docs
-- KA_DISPLAY_NAME:       Northwind Knowledge Assistant
+- KA_DISPLAY_NAME:       Northwind Knowledge Assistant (${monogram})
 - app_name:              <from databricks.yml resources.apps.streamlit-demo.name>
 - local_pdfs:            ./resources/*.pdf
 
 Do the following idempotently and report each change:
 
-1. Create the UC schema demo.knowledge_assistant (skip if exists)
-   and a managed volume demo.knowledge_assistant.docs.
+1. Confirm the SHARED `demo` catalog exists; DO NOT create it. If it is
+   missing, STOP and ask the user to escalate to the metastore admin.
+   Then create the UC schema demo.knowledge_assistant_${monogram}
+   (skip if exists) and a managed volume demo.knowledge_assistant_${monogram}.docs.
 
-2. Upload every PDF in ./resources/ to /Volumes/demo/knowledge_assistant/docs.
+2. Upload every PDF in ./resources/ to /Volumes/demo/knowledge_assistant_${monogram}/docs.
    STOP if 0 files were uploaded.
 
 3. Look for an existing Knowledge Assistant named "Northwind Knowledge
-   Assistant" via `databricks knowledge-assistants list-knowledge-assistants`.
+   Assistant (${monogram})" via `databricks knowledge-assistants list-knowledge-assistants`.
    - If it exists: capture its id and endpoint_name; do NOT recreate.
    - Otherwise: create it with the instructions block from §3.3 of the
      plan. Capture id and endpoint_name. Print both and tell me to
      record them in §1.1.
 
 4. List the KA's knowledge sources. If there's no `files` source
-   pointing at /Volumes/demo/knowledge_assistant/docs, create one
+   pointing at /Volumes/demo/knowledge_assistant_${monogram}/docs, create one
    with the exact JSON shape from §3.4 (`files.path` field). Then
    trigger `sync-knowledge-sources`.
 
@@ -288,11 +296,57 @@ Permissions take effect immediately. Re-running `bundle deploy` is idempotent �
 
 ## 4. DAB updates
 
-The Knowledge Assistant is **not** declared as a DAB resource in this minimalist setup. Agent Bricks resources don't appear in the bundle schema today, and the serving-endpoint permission is set via REST in §3.5 rather than via the bundle.
+> **Recommended:** the KA tile + knowledge source + endpoint are **still created manually** (Agent Bricks isn't in the DAB schema), but the repo's `databricks.yml` now binds the KA's serving endpoint to the app via `apps.<name>.resources.serving_endpoint`, which makes `bundle deploy` grant `CAN_QUERY` to the App SP automatically. That replaces the manual `databricks api patch /api/2.0/permissions/serving-endpoints/<ID>` step from §3.5. The PATCH path is kept as an **optional alternative** below for workspaces without DAB tooling.
 
-### 4.1 `databricks.yml`
+### 4.1 `databricks.yml` — shipped DAB shape
 
-No required changes. If a future bundle release ships a `knowledge_assistants` resource type, you would replace §3.3 / §3.4 / §3.5 with declarative blocks under `resources:` (with the App SP grant inside `apps.<name>.resources` as a `serving_endpoint` binding).
+```yaml
+variables:
+  ka_endpoint_name:
+    description: "Knowledge Assistant serving endpoint name (pattern: ka-<hash>-endpoint)."
+
+resources:
+  schemas:
+    knowledge_assistant:
+      catalog_name: demo                 # shared catalog — DAB does NOT create it
+      name: knowledge_assistant_${workspace.current_user.short_name}
+      grants:
+        - principal: ${var.app_sp_client_id}
+          privileges: [USE_SCHEMA]
+
+  volumes:
+    ka_docs:
+      catalog_name: demo                 # shared
+      schema_name: ${resources.schemas.knowledge_assistant.name}
+      name: docs
+      volume_type: MANAGED
+      grants:
+        - principal: ${var.app_sp_client_id}
+          privileges: [READ_VOLUME]
+
+  apps:
+    streamlit-demo:
+      # ... existing config ...
+      resources:
+        # ... existing entries ...
+        - name: ka-endpoint
+          serving_endpoint:
+            name: ${var.ka_endpoint_name}
+            permission: CAN_QUERY
+
+targets:
+  dev:
+    variables:
+      ka_endpoint_name: "<from §1.1>"
+```
+
+What still stays manual (DAB has no resource type for these):
+
+- **Creating the KA tile + its knowledge source + the serving endpoint** — §3.3 / §3.4 of this plan. Agent Bricks artefacts are preview-era and not in DAB.
+- **Uploading the PDFs** — `scripts/bootstrap.py` (no DAB volume-file resource).
+- **Re-running ingestion when source PDFs change** — `databricks knowledge-assistants sync-knowledge-sources …`.
+
+Don't run both the §3.5 PATCH **and** declare the binding above — `bundle deploy` will keep reconciling its declared state on top of whatever the PATCH left, so a single source of truth (the binding) is cleaner.
 
 ### 4.2 `app.yaml`
 

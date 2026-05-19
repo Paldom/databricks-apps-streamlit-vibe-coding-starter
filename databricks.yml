@@ -1,16 +1,38 @@
 # Databricks Asset Bundle for the Streamlit-on-Apps starter.
 #
 # Quickstart:
-#   1. Edit the dev target below: replace the <...> placeholders with
-#      your workspace's group names.
-#   2. Authenticate the CLI:    databricks auth login --host https://<workspace-host>
-#   3. Validate the bundle:     databricks bundle validate -t dev
-#   4. Deploy and run the app:  databricks bundle deploy -t dev
+#   1. One-time workspace bootstrap (NOT bundle-owned — DAB can't create these):
+#        * `demo` UC catalog                 → docs/plans/0_D_genie_setup.md §3.2
+#        * Genie Space + KA + Supervisor     → docs/plans/0_D, 6_*, 7_*
+#        * Tables, views, PDF uploads        → scripts/bootstrap.py (run once per workspace)
+#      Capture the resulting IDs and paste them under `targets.dev.variables` below.
+#   2. Edit the dev target: replace every `<...>` placeholder.
+#   3. Authenticate the CLI:    databricks auth login --host https://<workspace-host>
+#   4. Validate the bundle:     databricks bundle validate -t dev
+#   5. Deploy and run the app:  databricks bundle deploy -t dev
 #                               databricks bundle run streamlit-demo -t dev
 #
-# Per-page plans under docs/plans/ extend this file: they add variables,
-# append entries to resources.apps.streamlit-demo.resources, and add
-# values to targets.dev.variables. Start with docs/plans/0_initial_setup.md.
+# What this bundle OWNS (will be (re)created on deploy, destroyed on bundle destroy):
+#   * UC schemas:                demo.nyctaxi, demo.knowledge_assistant
+#   * UC volume:                 demo.knowledge_assistant.docs
+#   * Lakebase instance:         streamlit-demo-lakebase
+#   * Lakebase UC catalog:       streamlit_demo_lakebase
+#   * Synced table:              streamlit_demo_lakebase.nyctaxi.trips_synced
+#   * AI/BI dashboard:           NYC Taxi Trips Dashboard (from dashboards/*.lvdash.json)
+#   * App:                       streamlit-demo + all resource bindings + permissions
+#
+# What this bundle ATTACHES (DAB only binds; doesn't create — see §1 above):
+#   * Genie Space binding          → app gets CAN_RUN
+#   * KA serving-endpoint binding  → app gets CAN_QUERY
+#   * Supervisor endpoint binding  → app gets CAN_QUERY
+#   * SQL Warehouse binding        → app gets CAN_USE
+#
+# What this bundle does NOT touch (manual / scripts/bootstrap.py):
+#   * `demo` catalog itself (too coarse to destroy)
+#   * Tables/views (no DAB resource type)
+#   * PDF uploads to volume (no DAB resource type)
+#   * Postgres-side GRANT to app SP role (DAB can't run inside-Postgres SQL)
+#   * Agent Bricks artefacts (preview — not in DAB schema yet)
 #
 # See DEPLOY.md for the full deploy story and the manual-deploy alternative.
 
@@ -18,10 +40,44 @@ bundle:
   name: streamlit-demo
 
 variables:
+  # ---- App permissions (workspace groups)
   user_group_manage:
     description: "User group that receives CAN_MANAGE on the app."
   user_group_app:
     description: "User group that receives CAN_USE on the app and on per-page resources."
+  app_sp_client_id:
+    description: >-
+      Application ID of the app's auto-provisioned service principal.
+      Used to grant the SP UC privileges via `grants:` blocks on bundle-owned
+      schemas and volumes. Capture with:
+        databricks apps get <app_name> -o json | jq -r .service_principal_client_id
+      (Available after the FIRST `bundle deploy`.)
+
+  # ---- SQL Warehouse used by sql_conn() in the Sample Data page
+  sql_warehouse_id:
+    description: "SQL Warehouse ID used by the Sample Data page (pages/1_*)."
+
+  # ---- Genie Space (created outside DAB by docs/plans/0_D_genie_setup.md;
+  # ----  DAB only binds it to the app to grant CAN_RUN)
+  genie_space_id:
+    description: "Genie Space ID for the NYC Taxi Trips Genie."
+  genie_space_display_name:
+    description: "Display name shown on the app's resource list."
+    default: "NYC Taxi Trips Genie"
+
+  # ---- Knowledge Assistant serving endpoint (created outside DAB by
+  # ----  docs/plans/6_knowledge_assistant_page.md; DAB only binds it for CAN_QUERY)
+  ka_endpoint_name:
+    description: "Knowledge Assistant serving endpoint name (pattern: ka-<hash>-endpoint)."
+
+  # ---- Supervisor Agent serving endpoint (created outside DAB by
+  # ----  docs/plans/7_supervisor_page.md; DAB only binds it for CAN_QUERY)
+  supervisor_endpoint_name:
+    description: "Multi-Agent Supervisor serving endpoint name (pattern: mas-<hash>-endpoint)."
+
+  # ---- Dashboard parent path (for the Lakeview dashboard resource)
+  dashboard_parent_path:
+    description: "Workspace folder where the AI/BI dashboard `.lvdash.json` is materialised."
 
   # ---- Lakebase (Provisioned-schema DAB resources; the workspace creates the
   # ---- underlying instance as Autoscale, but the API + bindings stay backward
@@ -38,16 +94,63 @@ variables:
     description: "Standard UC schema for the sync pipeline storage."
     default: nyctaxi
 
+
 resources:
-  # ---- Lakebase database instance (legacy `database_instances` schema).
-  # In 2026+ workspaces this is created as an Autoscale project under the hood,
-  # but the DAB resource + Apps `database:` binding remain backward compatible.
+  # =========================================================================
+  # Unity Catalog — schemas + volume
+  # (The `demo` catalog itself is NOT bundle-owned. `bundle destroy` deletes
+  #  the schemas and the volume below — but the catalog survives, so any
+  #  other schema someone added to `demo` outside the bundle is safe.)
+  # =========================================================================
+
+  schemas:
+    nyctaxi:
+      catalog_name: demo
+      name: nyctaxi
+      comment: >-
+        NYC taxi sample data curated for Genie + Streamlit feature pages.
+        trips_raw is a deep clone of samples.nyctaxi.trips; v_trips_genie is
+        the curated business-facing view; trips_for_sync is the materialised
+        PK'd source for the Lakebase synced table.
+        Tables and views inside this schema are bootstrapped by
+        scripts/bootstrap.py — not by the bundle.
+      grants:
+        - principal: ${var.app_sp_client_id}
+          privileges: [USE_SCHEMA, SELECT]
+
+    knowledge_assistant:
+      catalog_name: demo
+      name: knowledge_assistant
+      comment: >-
+        Source documents and metadata for the Northwind Knowledge Assistant.
+        The KA artefact itself (with its serving endpoint) is created
+        outside DAB — see docs/plans/6_knowledge_assistant_page.md.
+      grants:
+        - principal: ${var.app_sp_client_id}
+          privileges: [USE_SCHEMA]
+
+  volumes:
+    ka_docs:
+      catalog_name: demo
+      schema_name: ${resources.schemas.knowledge_assistant.name}
+      name: docs
+      volume_type: MANAGED
+      comment: "Northwind Robotics source PDFs for Knowledge Assistant ingestion."
+      grants:
+        - principal: ${var.app_sp_client_id}
+          privileges: [READ_VOLUME]
+
+  # =========================================================================
+  # Lakebase (Provisioned-schema; Azure 2026+ creates an Autoscale instance
+  # under the hood but the resource shape stays backward compatible).
+  # =========================================================================
+
   database_instances:
     lakebase:
       name: ${var.lakebase_instance_name}
       capacity: CU_1
 
-  # UC catalog that registers the Lakebase database so synced tables can land in UC.
+  # UC catalog that registers the Lakebase database so synced tables land in UC.
   database_catalogs:
     lakebase_catalog:
       name: ${var.lakebase_catalog_name}
@@ -56,14 +159,13 @@ resources:
       create_database_if_not_exists: true
 
   # SNAPSHOT-mode sync from the UC source table → Lakebase Postgres.
-  # Source is the materialised table on top of demo.nyctaxi.v_trips_genie
-  # (see docs/plans/0_D_genie_setup.md).
+  # Source is `demo.nyctaxi.trips_for_sync` which is created by
+  # scripts/bootstrap.py (DAB has no `tables:` resource type).
   #
-  # The `name` references `resources.database_catalogs.lakebase_catalog.name`
-  # rather than `var.lakebase_catalog_name` so Terraform infers a dependency
-  # on the catalog resource and creates it BEFORE the synced table. Without
-  # the reference, both resources race in parallel and the synced table fails
-  # with "Catalog '<name>' does not exist".
+  # `name` references resources.database_catalogs.lakebase_catalog.name (not
+  # var.lakebase_catalog_name) so Terraform infers a dependency on the catalog
+  # resource — otherwise both race and the synced table fails with
+  # "Catalog '<name>' does not exist".
   synced_database_tables:
     trips_synced:
       name: ${resources.database_catalogs.lakebase_catalog.name}.nyctaxi.trips_synced
@@ -79,8 +181,29 @@ resources:
           storage_catalog: ${var.sync_pipeline_storage_catalog}
           storage_schema: ${var.sync_pipeline_storage_schema}
 
+  # =========================================================================
+  # AI/BI Dashboard — DAB-owned via dashboards/*.lvdash.json
+  # =========================================================================
+
+  dashboards:
+    nyc_taxi_dashboard:
+      display_name: NYC Taxi Trips Dashboard
+      parent_path: ${var.dashboard_parent_path}
+      warehouse_id: ${var.sql_warehouse_id}
+      file_path: ./dashboards/nyc_taxi_trips.lvdash.json
+      embed_credentials: true       # so app users see data without UC SELECT on the source view
+
+  # =========================================================================
+  # The App + every binding to bundle-owned and externally-created resources.
+  # Every binding here REPLACES a manual `databricks api patch` call that
+  # earlier plans documented as an imperative step.
+  # =========================================================================
+
   apps:
     streamlit-demo:
+      # TEMP workaround for the original deploy where an app named
+      # `streamlit-demo` already existed. Revert to `streamlit-demo` once the
+      # orphan is cleaned up (`databricks apps delete streamlit-demo`).
       name: streamlit-demo-2026-05-17
       source_code_path: ./
       permissions:
@@ -89,18 +212,54 @@ resources:
         - level: CAN_USE
           group_name: ${var.user_group_app}
       resources:
-        # Lakebase database binding — Databricks Apps injects PGHOST / PGDATABASE /
-        # PGPORT / PGSSLMODE / PGUSER for this resource and creates a Postgres role
-        # for the app SP with CONNECT + CREATE. Table-level SELECT still needs a
-        # one-off GRANT in Postgres (see the verification section below).
+        # ---- SQL Warehouse (Sample Data page) — replaces manual app-resource UI add.
+        - name: sql-warehouse
+          sql_warehouse:
+            id: ${var.sql_warehouse_id}
+            permission: CAN_USE
+
+        # ---- Lakebase database binding — injects PG* env vars + creates
+        # the app SP's Postgres role with CONNECT + CREATE. Table-level
+        # SELECT still needs a one-off Postgres GRANT (no DAB equivalent).
         - name: lakebase-db
           database:
             instance_name: ${resources.database_instances.lakebase.name}
             database_name: databricks_postgres
             permission: CAN_CONNECT_AND_CREATE
 
+        # NOTE: the AI/BI dashboard is declared at top-level
+        # `resources.dashboards.nyc_taxi_dashboard` but is NOT bound under
+        # the app's `resources:` block — Databricks Apps' resource schema
+        # doesn't include a `dashboard` binding type today. The page reaches
+        # the dashboard via its embed URL (DASHBOARD_EMBED_URL in app.yaml).
+
+        # ---- Genie Space binding — replaces the manual
+        # `databricks api patch /api/2.0/permissions/genie/<id>` call that
+        # used to live in docs/plans/5_genie_native_page.md §3.2.
+        - name: genie-space
+          genie_space:
+            name: ${var.genie_space_display_name}
+            space_id: ${var.genie_space_id}
+            permission: CAN_RUN
+
+        # ---- Knowledge Assistant serving endpoint binding — replaces the
+        # manual permissions PATCH from docs/plans/6_*.md §3.5.
+        - name: ka-endpoint
+          serving_endpoint:
+            name: ${var.ka_endpoint_name}
+            permission: CAN_QUERY
+
+        # ---- Supervisor Agent serving endpoint binding — replaces the
+        # manual permissions PATCH from docs/plans/7_*.md §3.4.
+        - name: supervisor-endpoint
+          serving_endpoint:
+            name: ${var.supervisor_endpoint_name}
+            permission: CAN_QUERY
+
+
 # Files synced to the workspace alongside the app source.
-# Excludes keep deploys small and prevent doc/CI files from cluttering the app folder.
+# `dashboards/` is intentionally NOT excluded — DAB reads the .lvdash.json
+# from the local repo, no need to sync it to the app folder.
 sync:
   exclude:
     - .github/**
@@ -115,19 +274,48 @@ sync:
     - "**/__pycache__/**"
     - docs/**
     - cookbook/**
+    - dashboards/**
+    - scripts/**
+    - resources/**
     - "*.md"
     - .DS_Store
     - .gitignore
     - .gitmodules
 
+
 targets:
   dev:
-    mode: development
+    # Use `mode: production` (not development) for this target. Development
+    # mode auto-prefixes UC schemas / volumes with `dev_<user>_…` and tags
+    # job / app / dashboard names with `[dev <user>]`, which would prevent
+    # the bundle from ADOPTING the canonical objects we already provisioned
+    # by hand (demo.nyctaxi, demo.knowledge_assistant, the dashboard, etc.).
+    # This dev target represents a shared dev workspace where everyone sees
+    # the same data — production mode is the right semantic fit. Promote
+    # to a separate `prod` target via Git branch when ready.
+    mode: production
     default: true
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
     variables:
+      # ---- App permissions ----
       user_group_manage: "<your-admin-group>"
-      user_group_app: "<your-users-group>"
-      lakebase_instance_name: "streamlit-demo-lakebase"
-      lakebase_catalog_name: "streamlit_demo_lakebase"
+      user_group_app:    "<your-users-group>"
+      app_sp_client_id:  "96ac8af2-aac9-42a6-8e54-eec78b859126"   # from `databricks apps get` after first deploy
+
+      # ---- SQL Warehouse ----
+      sql_warehouse_id:  "1463663e9d511f7c"
+
+      # ---- Agent Bricks (created externally) ----
+      genie_space_id:    "01f152305d531fc9b1c8e70b439bfa9e"
+      ka_endpoint_name:  "ka-fa945a0b-endpoint"
+      supervisor_endpoint_name: "mas-ccec4a8f-endpoint"
+
+      # ---- AI/BI Dashboard ----
+      dashboard_parent_path: "/Workspace/Users/domonkos.pal@hiflylabs.com"
+
+      # ---- Lakebase ----
+      lakebase_instance_name:        "streamlit-demo-lakebase"
+      lakebase_catalog_name:         "streamlit_demo_lakebase"
       sync_pipeline_storage_catalog: "demo"
-      sync_pipeline_storage_schema: "nyctaxi"
+      sync_pipeline_storage_schema:  "nyctaxi"

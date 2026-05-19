@@ -4,7 +4,16 @@ Page-specific plan for `pages/2_Lakebase_Sync.py` — a Postgres-side view of NY
 
 > **Prerequisites.**
 > - **`0_A_initial_setup.md`** must be done — App, `databricks.yml`, `utils.py`, `app.py`, `app.yaml`, `pyproject.toml`, `uv.lock` already in place; worksheet §1.1 values captured.
-> - **`0_D_genie_setup.md`** is **required** — this plan reads from `demo.nyctaxi.v_trips_genie` (created in 0_D) and materialises it into a Delta table with a primary key for the sync.
+> - **`0_D_genie_setup.md`** is **required** — this plan reads from `demo.nyctaxi_${monogram}.v_trips_genie` (created in 0_D) and materialises it into a Delta table with a primary key for the sync.
+
+> **DAB-first.** Every Lakebase resource on this page is already DAB-owned: `database_instances.lakebase`, `database_catalogs.lakebase_catalog`, `synced_database_tables.trips_synced`, plus the `apps.streamlit-demo.resources.lakebase-db` binding. `bundle deploy` creates the whole stack idempotently; `bundle destroy` removes it. The only piece DAB **cannot** own is `demo.nyctaxi_${monogram}.trips_for_sync` — the materialised source table — because DAB has no `tables:` resource type. `scripts/bootstrap.py` creates it. The Postgres-side `GRANT USAGE` / `GRANT SELECT` to the App SP role in §3.4 also stays manual — DAB can't run inside-Postgres SQL.
+
+> **Naming convention — shared catalog for source data, Lakebase-owned catalog for the sync.** Two catalogs are in play and they behave very differently:
+>
+> 1. **Shared `demo` catalog** — the *source* table (`demo.nyctaxi_${monogram}.trips_for_sync`) lives here. `demo` is pre-existing shared infrastructure; operators only own their per-monogram schema inside it. **`CREATE_CATALOG ON METASTORE` is NOT required** for the source side.
+> 2. **Lakebase-owned UC catalog** (`streamlit_demo_lakebase_${monogram}`) — registered automatically by the Lakebase `database_catalogs` DAB resource when the instance is provisioned. This is *not* a metastore-admin catalog create; the Lakebase provisioning path owns it.
+>
+> For Lakebase: instance is `streamlit-demo-lakebase-${monogram}` (hyphen form) and the UC catalog is `streamlit_demo_lakebase_${monogram}` (underscore form — Postgres rejects hyphens). **All `demo.nyctaxi.…`, `streamlit-demo-lakebase`, and `streamlit_demo_lakebase` literals in the snippets below are placeholders — substitute the `${monogram}`-suffixed names everywhere when running for real.**
 
 ---
 
@@ -31,9 +40,9 @@ Page-specific knobs. App-level values (`app_name`, `user_group_app`, …) are re
 
 - **`lakebase_instance_name`** = `streamlit-demo-lakebase`
 - **`lakebase_catalog_name`** = `streamlit_demo_lakebase`
-- **`sync_pipeline_storage_catalog`** = `demo`
-- **`sync_pipeline_storage_schema`** = `nyctaxi`
-- **`source_uc_table`** = `demo.nyctaxi.trips_for_sync`
+- **`sync_pipeline_storage_catalog`** = `demo` *(shared — do not create)*
+- **`sync_pipeline_storage_schema`** = `nyctaxi_${monogram}`
+- **`source_uc_table`** = `demo.nyctaxi_${monogram}.trips_for_sync`
 - **`primary_key_column`** = `trip_id`
 - **`sync_mode`** = `SNAPSHOT`
 - **`postgres_schema`** (also the UC schema portion of the synced-table name) = `nyctaxi`

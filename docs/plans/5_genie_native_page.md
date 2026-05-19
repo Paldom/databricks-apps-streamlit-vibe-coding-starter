@@ -4,7 +4,7 @@ Page-specific plan for `pages/5_NYC_Taxi_Genie_native.py` — a brand-consistent
 
 > **Prerequisites.**
 > - **`0_A_initial_setup.md`** must be done — App, `databricks.yml`, `utils.py`, `app.py`, `app.yaml`, `pyproject.toml`, `uv.lock` already in place; worksheet §1.1 values (`app_name`, `user_group_app`, …) captured.
-> - **`0_D_genie_setup.md`** is **required** — it creates the Genie Space (`NYC Taxi Trips Genie`) over `demo.nyctaxi.v_trips_genie` that this plan talks to. If you skip 0_D, point `GENIE_SPACE_ID` at any published Genie Space; the page code itself is brand-agnostic.
+> - **`0_D_genie_setup.md`** is **required** — it creates the Genie Space (`NYC Taxi Trips Genie (${monogram})`) over `demo.nyctaxi_${monogram}.v_trips_genie` that this plan talks to. If you skip 0_D, point `GENIE_SPACE_ID` at any published Genie Space; the page code itself is brand-agnostic.
 
 > **Sibling plan.** `1_D_genie_iframe_page.md` covers the iframe-embed variant of the same Genie Space. Pick `1_D` for zero maintenance and the full workspace Genie UI; pick **this plan (`1_E`)** when you want brand-consistent theming, programmatic access to the answer / SQL / DataFrame, or non-chat-shaped UX that wraps Genie results.
 
@@ -13,6 +13,8 @@ Page-specific plan for `pages/5_NYC_Taxi_Genie_native.py` — a brand-consistent
 > 2. UC `USE_CATALOG` + `USE_SCHEMA` + `SELECT` along the path to the attached view.
 >
 > Either one missing produces a `Unable to get space …` error or a `permission denied for table …` once Genie tries to run its generated SQL. §3 below provisions both layers idempotently.
+
+> **Naming convention — shared catalog, monogrammed schema.** The Genie Space reads from the **shared `demo` catalog** + per-operator schema (pre-existing). The Genie Space display name is `NYC Taxi Trips Genie (${monogram})` and it reads from `demo.nyctaxi_${monogram}.v_trips_genie`. **All `demo.nyctaxi.…` literals and the `NYC Taxi Trips Genie` display name in the snippets below are placeholders — substitute `demo.nyctaxi_${monogram}.…` and `NYC Taxi Trips Genie (${monogram})` everywhere when running for real.** This plan never creates a catalog — `CREATE_CATALOG ON METASTORE` is NOT required.
 
 ---
 
@@ -32,7 +34,7 @@ Page-specific knobs; app-level values are reused from `0_A_initial_setup.md` §1
 
 - **`GENIE_SPACE_ID`** (from `0_D_genie_setup.md` §1.1) = `__________________`
 - **`app_sp_client_id`** (`databricks apps get <app-name> -o json` → `.service_principal_client_id`) = `__________________`
-- **`source_uc_view`** (the table/view attached to the Genie Space) = `demo.nyctaxi.v_trips_genie`
+- **`source_uc_view`** (the table/view attached to the Genie Space) = `demo.nyctaxi_${monogram}.v_trips_genie`
 - **Page title** = `NYC Taxi Genie (native)`
 - **Page icon** = `:material/smart_toy:`
 - **Page filename** = `pages/5_NYC_Taxi_Genie_native.py`
@@ -151,9 +153,10 @@ Object type is `genie`, object path is `/api/2.0/permissions/genie/<space-id>`. 
 Once `CAN_RUN` is in place, the SDK call returns the Genie Space's reply — but **Genie then executes its generated SQL with the caller's UC identity**. So the SP also needs:
 
 ```sql
-GRANT USE CATALOG ON CATALOG demo                       TO `<app_sp_client_id>`;
-GRANT USE SCHEMA  ON SCHEMA  demo.nyctaxi               TO `<app_sp_client_id>`;
-GRANT SELECT      ON VIEW    demo.nyctaxi.v_trips_genie TO `<app_sp_client_id>`;
+-- The `demo` catalog is SHARED — do not attempt to create or own it. Just grant USE on it.
+GRANT USE CATALOG ON CATALOG demo                                   TO `<app_sp_client_id>`;
+GRANT USE SCHEMA  ON SCHEMA  demo.nyctaxi_${monogram}               TO `<app_sp_client_id>`;
+GRANT SELECT      ON VIEW    demo.nyctaxi_${monogram}.v_trips_genie TO `<app_sp_client_id>`;
 ```
 
 If you've already granted `<user_group_app>` these privileges in `0_D_genie_setup.md` §5.3, that does **not** cover the app SP unless you also add the SP to that group. The cleanest path is the direct grant above.
@@ -169,7 +172,7 @@ docs/plans/1_E_genie_native_page.md.
 Inputs from §1.1 + 0_A_initial_setup.md §1.1:
 - app_name:        <from databricks.yml resources.apps.streamlit-demo.name>
 - GENIE_SPACE_ID:  <from 0_D_genie_setup.md §1.1>
-- source_uc_view:  demo.nyctaxi.v_trips_genie
+- source_uc_view:  demo.nyctaxi_${monogram}.v_trips_genie
 
 Do the following idempotently and report each change:
 
@@ -186,10 +189,11 @@ Do the following idempotently and report each change:
    Verify with a GET on the same path.
 
 3. Using the manage_uc_grants MCP tool, grant the SP these privileges
-   (idempotent — re-running is fine):
+   (idempotent — re-running is fine). The `demo` catalog is SHARED — do
+   NOT attempt to create it:
    - USE_CATALOG on CATALOG demo
-   - USE_SCHEMA  on SCHEMA  demo.nyctaxi
-   - SELECT      on TABLE   demo.nyctaxi.v_trips_genie
+   - USE_SCHEMA  on SCHEMA  demo.nyctaxi_${monogram}
+   - SELECT      on TABLE   demo.nyctaxi_${monogram}.v_trips_genie
 
 4. Verify by calling Genie as the SP using a one-shot Python script:
        from databricks.sdk import WorkspaceClient
@@ -218,16 +222,17 @@ Permissions take effect immediately — no app restart needed if the grants were
 
 ## 4. DAB updates
 
-The Genie Space is created in `0_D_genie_setup.md` and lives as a workspace asset, **not** as a DAB resource here. This plan needs only one tiny `app.yaml` env entry.
+> **Recommended:** the repo's `databricks.yml` now declares the Genie Space as an **app resource binding** so `bundle deploy` grants the App SP `CAN_RUN` automatically (replacing the manual `databricks api patch /api/2.0/permissions/genie/<id>` step from §3.2). `bundle destroy` revokes the grant cleanly. The manual PATCH path in §3.2 is documented as an **optional alternative** for workspaces without DAB tooling.
 
-### 4.1 `databricks.yml`
-
-No required changes. If you want bundle-managed Genie permissions (so `bundle destroy` revokes the SP's `CAN_RUN`), declare the space as an app resource:
+### 4.1 `databricks.yml` — shipped DAB shape
 
 ```yaml
 variables:
   genie_space_id:
-    description: "Genie Space ID for the Native Genie Chat page."
+    description: "Genie Space ID for the NYC Taxi Trips Genie."
+  genie_space_display_name:
+    description: "Display name shown on the app's resource list."
+    default: "NYC Taxi Trips Genie"
 
 resources:
   apps:
@@ -237,21 +242,22 @@ resources:
         # ... existing entries ...
         - name: genie-space
           genie_space:
-            name: NYC Taxi Trips Genie
+            name: ${var.genie_space_display_name}
             space_id: ${var.genie_space_id}
             permission: CAN_RUN
-```
 
-…with a value under `targets.dev.variables`:
-
-```yaml
 targets:
   dev:
     variables:
       genie_space_id: "<from 0_D_genie_setup.md §1.1>"
 ```
 
-This is **optional** — §3.2's `databricks api patch ...` already grants `CAN_RUN`. The DAB binding is just a bookkeeping mechanism so future `bundle destroy` cleans up the grant too. Don't both PATCH and declare the binding unless you want one to be the source of truth (pick the binding).
+What still stays manual (DAB has no resource type for these):
+
+- **Creating the Genie Space itself** — `0_D_genie_setup.md` §3.6, via `manage_genie` / `databricks-genie` CLI / UI.
+- **UC `SELECT` on `demo.nyctaxi.v_trips_genie`** for the App SP — granted by `scripts/bootstrap.py` step 6 (view-level grants can't live in the bundle's `schemas:` grants block because DAB doesn't own the view).
+
+Pick the binding **or** the §3.2 PATCH — don't do both, or one will overwrite the other on the next `bundle deploy`.
 
 ### 4.2 `app.yaml`
 

@@ -6,6 +6,10 @@ Page-specific plan for `pages/1_Sample_Data.py` — a Unity Catalog data browser
 > - **`0_A_initial_setup.md`** must be done — App, `databricks.yml`, `utils.py`, `app.py`, `app.yaml`, `pyproject.toml`, `uv.lock` already in place; worksheet §1.1 values (`app_name`, `user_group_app`, …) captured.
 > - **`0_D_genie_setup.md`** is the recommended prerequisite — it creates the catalog/schema/clone/view this plan reads from (`demo.nyctaxi.v_trips_genie`). If you skip 0_D, fall back to `UNITY_CATALOG_TABLE = samples.nyctaxi.trips` and rewrite the page's `SELECT` + sidebar filters for the raw column shape (`tpep_pickup_datetime`, `fare_amount`, `trip_distance`, integer ZIPs). The page logic is identical; only column names change. See §5.4.
 
+> **DAB-first.** The repo's `databricks.yml` now declares the **SQL Warehouse** as an app resource binding (`apps.streamlit-demo.resources.sql-warehouse`) — so `bundle deploy` automatically grants the App SP `CAN_USE` on the warehouse, replacing the manual "Apps UI → Add resource" step. The UC `SELECT` grant on `demo.nyctaxi.v_trips_genie` is granted to the App SP by `scripts/bootstrap.py` (DAB owns the schema's grants but the view itself is created outside DAB, so its grant lives in the bootstrap script). §3.3 below documents the manual Apps-UI path as an **optional alternative**.
+
+> **Naming convention — shared catalog, monogrammed schema.** UC objects this plan reads live in the **shared `demo` catalog** (pre-existing), inside the operator's per-monogram schema. Use `demo.nyctaxi_${monogram}` (shared catalog + monogrammed schema) and `streamlit-demo-${monogram}` for App / Lakebase resources (hyphen form). **All `demo.nyctaxi.…` literals in the snippets below are placeholders — substitute `demo.nyctaxi_${monogram}.…` everywhere when running for real.** This plan never creates a catalog — `CREATE_CATALOG ON METASTORE` is NOT required.
+
 ---
 
 ## 1. Parameters to set
@@ -23,7 +27,7 @@ Only page-specific knobs. Values already captured in `0_A_initial_setup.md` §1.
 
 ### 1.1 Fill-in worksheet
 
-- **`UNITY_CATALOG_TABLE`** = `demo.nyctaxi.v_trips_genie`  *(fallback if 0_D is skipped: `samples.nyctaxi.trips`)*
+- **`UNITY_CATALOG_TABLE`** = `demo.nyctaxi_${monogram}.v_trips_genie`  *(fallback if 0_D is skipped: `samples.nyctaxi.trips`)*
 - **`SQL_WAREHOUSE_ID`** (workspace warehouse ID) = `__________________`
 - **`sql-warehouse`** (app resource key bound to the warehouse above) = `sql-warehouse`
 - **`ROW_LIMIT`** (in-code constant) = `10000`

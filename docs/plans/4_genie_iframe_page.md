@@ -4,9 +4,13 @@ Page-specific plan for `pages/4_NYC_Taxi_Genie_iFrame.py` — a Streamlit page t
 
 > **Prerequisites.**
 > - **`0_A_initial_setup.md`** must be done — App, `databricks.yml`, `utils.py`, `app.py`, `app.yaml`, `pyproject.toml`, `uv.lock` already in place; worksheet §1.1 values (`app_name`, `user_group_app`, …) captured.
-> - **`0_D_genie_setup.md`** is **required** — it creates the Genie Space (`NYC Taxi Trips Genie`) over `demo.nyctaxi.v_trips_genie` that this plan embeds. If you skip 0_D, point `GENIE_SPACE_URL` at any published Genie Space; the page itself is brand-agnostic.
+> - **`0_D_genie_setup.md`** is **required** — it creates the Genie Space (`NYC Taxi Trips Genie (${monogram})`) over `demo.nyctaxi_${monogram}.v_trips_genie` that this plan embeds. If you skip 0_D, point `GENIE_SPACE_URL` at any published Genie Space; the page itself is brand-agnostic.
+
+> **DAB-first.** The iframe variant inherits whatever the viewer's own permissions are — the iframe runs in their browser session, not as the App SP — so this page **does not need a DAB-managed app resource binding**. The native chat sibling (`5_genie_native_page.md` §4.1) declares `apps.streamlit-demo.resources.genie-space`; that binding is also in scope here if you want a single source of truth for the App SP's `CAN_RUN`, but it has no runtime effect on the iframe page. The only DAB-relevant work here is the literal `GENIE_SPACE_URL` env var in `app.yaml`.
 
 > **Sibling plan.** `1_E_genie_native_page.md` describes the same Genie Space rendered through a custom Streamlit chat UI built on the Databricks SDK's Conversation API. Pick `1_D` for zero maintenance and the full workspace Genie experience; pick `1_E` when you need brand-consistent theming, custom chat behaviour, or the conversation result available as a pandas DataFrame downstream.
+
+> **Naming convention — shared catalog, monogrammed schema.** The Genie Space reads from the **shared `demo` catalog** + per-operator schema (pre-existing). The Genie Space display name is `NYC Taxi Trips Genie (${monogram})` and it reads from `demo.nyctaxi_${monogram}.v_trips_genie`. **All `demo.nyctaxi.…` literals and the `NYC Taxi Trips Genie` display name in the snippets below are placeholders — substitute `demo.nyctaxi_${monogram}.…` and `NYC Taxi Trips Genie (${monogram})` everywhere when running for real.** This plan never creates a catalog — `CREATE_CATALOG ON METASTORE` is NOT required.
 
 ---
 
@@ -80,7 +84,7 @@ Browser:  workspace's own Genie chat UI rendered inside the iframe
 - For each end-user of the page:
   - Workspace membership — the iframe inherits the browser's workspace session.
   - `CAN RUN` on the Genie Space (so they can ask questions).
-  - `SELECT` on `demo.nyctaxi.v_trips_genie` plus `USE CATALOG demo` + `USE SCHEMA demo.nyctaxi` — Genie executes generated SQL as the viewer.
+  - `SELECT` on `demo.nyctaxi_${monogram}.v_trips_genie` plus `USE CATALOG demo` + `USE SCHEMA demo.nyctaxi_${monogram}` — Genie executes generated SQL as the viewer.
 
 If `0_D_genie_setup.md` §5.3 was run, the `<user_group_app>` already has all of the above.
 
@@ -115,21 +119,22 @@ docs/plans/1_D_genie_iframe_page.md.
 Inputs:
 - GENIE_SPACE_ID:    <from 0_D_genie_setup.md §1.1>
 - user_group_app:    <from 0_A_initial_setup.md §1.1>
-- source_view:       demo.nyctaxi.v_trips_genie
+- source_view:       demo.nyctaxi_${monogram}.v_trips_genie
 
 Do the following idempotently and report each finding:
 
 1. Call get_genie(space_id=GENIE_SPACE_ID). STOP if the space is not
    found — that means 0_D_genie_setup.md has not been completed.
 
-2. Confirm the space is attached to demo.nyctaxi.v_trips_genie and that
-   it has a non-empty warehouse_id. Report the warehouse name.
+2. Confirm the space is attached to demo.nyctaxi_${monogram}.v_trips_genie
+   and that it has a non-empty warehouse_id. Report the warehouse name.
 
 3. Ensure the following UC grants exist for <user_group_app>; create
-   any that are missing via manage_uc_grants:
+   any that are missing via manage_uc_grants. Do NOT attempt to create
+   the `demo` catalog — it is shared and pre-existing:
    - USE CATALOG on demo
-   - USE SCHEMA  on demo.nyctaxi
-   - SELECT      on demo.nyctaxi.v_trips_genie
+   - USE SCHEMA  on demo.nyctaxi_${monogram}
+   - SELECT      on demo.nyctaxi_${monogram}.v_trips_genie
 
 4. Print the iframe embed URL:
    https://<workspace-host>/embed/genie/rooms/<GENIE_SPACE_ID>

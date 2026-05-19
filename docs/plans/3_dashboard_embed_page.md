@@ -4,7 +4,9 @@ Page-specific plan for `pages/3_NYC_Taxi_Dashboard.py` — a Streamlit page that
 
 > **Prerequisites.**
 > - **`0_A_initial_setup.md`** must be done — App, `databricks.yml`, `utils.py`, `app.py`, `app.yaml`, `pyproject.toml`, `uv.lock` already in place; worksheet §1.1 values (`app_name`, `user_group_app`, …) captured.
-> - **`0_D_genie_setup.md`** is **required** — the dashboard reads from `demo.nyctaxi.v_trips_genie` (created in 0_D). If you skip 0_D, change `SOURCE_VIEW` below to your own UC view/table and rebuild the dataset queries.
+> - **`0_D_genie_setup.md`** is **required** — the dashboard reads from `demo.nyctaxi_${monogram}.v_trips_genie` (created in 0_D). If you skip 0_D, change `SOURCE_VIEW` below to your own UC view/table and rebuild the dataset queries.
+
+> **Naming convention — shared catalog, monogrammed schema.** The dashboard reads from the **shared `demo` catalog** + per-operator schema (pre-existing). The dashboard display name should be `NYC Taxi Trips Dashboard (${monogram})` and it queries `demo.nyctaxi_${monogram}.v_trips_genie`. **All `demo.nyctaxi.…` literals in the snippets below are placeholders — substitute `demo.nyctaxi_${monogram}.…` everywhere when running for real.** This plan never creates a catalog — `CREATE_CATALOG ON METASTORE` is NOT required.
 
 ---
 
@@ -32,7 +34,7 @@ Page-specific knobs; app-level values (`app_name`, `user_group_app`, …) are re
 - **`WORKSPACE_HOST`** (from `0_A_initial_setup.md` §1.1, no trailing slash) = `https://__________________`
 - **`DASHBOARD_EMBED_URL`** (computed) = `${WORKSPACE_HOST}/embed/dashboardsv3/${DASHBOARD_ID}`
 - **`SQL_WAREHOUSE_ID`** (Pro or Serverless) = `__________________`
-- **`SOURCE_VIEW`** = `demo.nyctaxi.v_trips_genie`
+- **`SOURCE_VIEW`** = `demo.nyctaxi_${monogram}.v_trips_genie`
 - **`IFRAME_HEIGHT_PX`** = `1100`
 - **Page title** = `NYC Taxi Dashboard`
 - **Page icon** = `:material/dashboard:`
@@ -238,33 +240,47 @@ Workspace → Dashboards → *NYC Taxi Trips Dashboard* → **Share** → add `<
 
 ## 4. DAB updates
 
-The dashboard itself is **not** declared as a DAB resource in this minimalist setup — it's a workspace asset created once via MCP/CLI/UI. The DAB only needs to surface the embed URL to the app.
+> **Recommended:** the repo's `databricks.yml` now owns the dashboard via a `resources.dashboards` block that points at `dashboards/nyc_taxi_trips.lvdash.json` in the repo. `bundle deploy` creates/updates it; `bundle destroy` removes it. The §3.3 / §3.4 imperative `manage_dashboard(action="create_or_update", …)` flow remains documented as an **optional alternative** for workspaces without DAB tooling.
 
-### 4.1 `databricks.yml`
-
-No required changes. If you later want the dashboard managed by the bundle (so `bundle destroy` removes it too), add it under `resources` and bind it to the app:
+### 4.1 `databricks.yml` — shipped DAB shape
 
 ```yaml
-# Optional — full DAB-managed lifecycle:
+variables:
+  dashboard_parent_path:
+    description: "Workspace folder where the AI/BI dashboard `.lvdash.json` is materialised."
+  sql_warehouse_id:
+    description: "Pro/Serverless warehouse the dashboard queries against."
+
 resources:
   dashboards:
     nyc_taxi_dashboard:
       display_name: NYC Taxi Trips Dashboard
-      parent_path: /Workspace/Users/${workspace.current_user.userName}
+      parent_path: ${var.dashboard_parent_path}
       warehouse_id: ${var.sql_warehouse_id}
-      file_path: ../dashboards/nyc_taxi_trips.lvdash.json  # exported JSON
-  apps:
-    streamlit-demo:
-      # ... existing config ...
-      resources:
-        # ... existing entries ...
-        - name: nyc-taxi-dashboard
-          dashboard:
-            id: ${resources.dashboards.nyc_taxi_dashboard.id}
-            permission: CAN_READ
+      file_path: ./dashboards/nyc_taxi_trips.lvdash.json
+      embed_credentials: true     # so app users see data without UC SELECT on the source view
+
+targets:
+  dev:
+    variables:
+      dashboard_parent_path: "/Workspace/Users/<your-email>"
+      sql_warehouse_id:      "<warehouse-id>"
 ```
 
-This plan ships the simpler "static embed URL" pattern: the dashboard lives in the workspace, the URL is a `value:` in `app.yaml`, no DAB binding required.
+Run order from a fresh workspace:
+
+1. Bootstrap the source data (`scripts/bootstrap.py` — creates `demo.nyctaxi.v_trips_genie`).
+2. **(One-time only — exporting an existing dashboard)** If you're migrating from a workspace-owned dashboard, export its `.lvdash.json` and commit it:
+   ```bash
+   databricks api get /api/2.0/lakeview/dashboards/<DASHBOARD_ID> \
+     | jq -r .serialized_dashboard > dashboards/nyc_taxi_trips.lvdash.json
+   ```
+   If you're creating from scratch, write a JSON file with the dataset/widget shape from §4.2 below.
+3. `databricks bundle deploy -t dev` — DAB calls the same `create_or_update` API the §3.3 path uses, but driven by the local `.lvdash.json`.
+
+**Why `embed_credentials: true` matters here.** `bundle deploy` re-publishes the dashboard on every run; the flag preserves the publisher-credentials mode so the iframe in the Streamlit page keeps working for users without UC `SELECT` on the source view. Forgetting it returns the dashboard to per-viewer credentials.
+
+**App-side dashboard binding.** Databricks Apps' `resources:` schema does **not** support a `dashboard` binding type today. The page reaches the dashboard via the iframe URL in `app.yaml` (`DASHBOARD_EMBED_URL`), not as a runtime app resource — so there's nothing to bind under `apps.streamlit-demo.resources`. If a future DAB release adds it, that's where the binding would go.
 
 ### 4.2 Reference dashboard JSON (for `serialized_dashboard`)
 

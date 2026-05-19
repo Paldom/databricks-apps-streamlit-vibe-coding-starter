@@ -6,6 +6,12 @@ Provisioning plan for a Databricks Genie Space backed by a curated copy of `samp
 
 > **Source-of-truth principle.** Don't point Genie at `samples.nyctaxi.trips` directly: the `samples` catalog is read-only, so you can't attach UC comments, statistics, synonyms, or SQL expressions to it. Instead clone it into a writable catalog (`demo.nyctaxi.trips_raw`), build one curated business-facing view (`demo.nyctaxi.v_trips_genie`) and attach **only the view** to Genie. The raw table stays around for ad-hoc query and audit, but Genie never sees it directly.
 
+> **DAB-first.** The repo's `databricks.yml` now owns the schema (`demo_${monogram}.nyctaxi`) and the source-table comments via a `resources.schemas` block with grants. Tables and views (`trips_raw`, `v_trips_genie`, `trips_for_sync`) live in `scripts/bootstrap.py` because DAB has no `tables` / `views` resource type today. The **Genie Space itself is still created manually** — Agent Bricks artefacts are not in the bundle schema yet. The imperative `manage_uc_objects` + `execute_sql` path in §3.2 / §3.3 / §3.4 below remains documented as an **optional alternative** for workspaces without DAB tooling.
+
+> **Naming convention — shared catalog, monogrammed schema.** Every resource this plan creates lives inside the **shared `demo` catalog** (pre-existing). The *schema* carries the developer's monogram (see `0_A_initial_setup.md` §1.0 — derived from `databricks current-user me` → `displayName`). Use `demo.nyctaxi_${monogram}` (shared catalog + monogrammed schema) and `NYC Taxi Trips Genie (${monogram})` for the Genie display name. **All `demo.nyctaxi.…` literals in the SQL / YAML / CLI snippets below are placeholders — substitute `demo.nyctaxi_${monogram}.…` everywhere when running for real.** Two developers on the same workspace can run this plan side-by-side without collisions as long as their monograms differ.
+>
+> **No `CREATE CATALOG` required.** This plan never creates a catalog — the shared `demo` catalog is provisioned once by a metastore admin and every operator carves a personal schema inside it. If you do not have `CREATE CATALOG ON METASTORE`, the default path works for you as-is.
+
 ---
 
 ## 1. Parameters to set
@@ -14,8 +20,8 @@ Page-agnostic; all knobs live in Unity Catalog or on the Genie Space itself.
 
 | Parameter | Where it lives | Notes |
 |---|---|---|
-| Catalog name | Unity Catalog | Owner = the user who runs the create call. Needs `CREATE CATALOG` at the metastore. |
-| Schema name | Unity Catalog | Holds the raw clone + curated view. |
+| Catalog name | Unity Catalog | **Shared `demo` catalog — pre-existing.** Operators only need `USE CATALOG` + `CREATE SCHEMA` on it. No `CREATE CATALOG` required. |
+| Schema name | Unity Catalog | Per-operator schema (monogrammed) — holds the raw clone + curated view. Operator owns and can drop it without touching shared resources. |
 | Raw table name | Unity Catalog | Deep clone of `samples.nyctaxi.trips`; not attached to Genie. |
 | Curated view name | Unity Catalog | The only object attached to Genie. Renames + derives columns for readability. |
 | SQL warehouse ID | Genie Space settings | Must be Pro or Serverless — Genie does not support Classic warehouses. |
@@ -26,10 +32,10 @@ Page-agnostic; all knobs live in Unity Catalog or on the Genie Space itself.
 
 ### 1.1 Fill-in worksheet
 
-- **`catalog_name`** = `demo`
-- **`schema_name`** = `nyctaxi`
-- **`raw_table`** = `trips_raw` *(full name `demo.nyctaxi.trips_raw`)*
-- **`curated_view`** = `v_trips_genie` *(full name `demo.nyctaxi.v_trips_genie`)*
+- **`catalog_name`** = `demo` *(shared — do not create)*
+- **`schema_name`** = `nyctaxi_${monogram}` *(per-operator, monogrammed)*
+- **`raw_table`** = `trips_raw` *(full name `demo.nyctaxi_${monogram}.trips_raw`)*
+- **`curated_view`** = `v_trips_genie` *(full name `demo.nyctaxi_${monogram}.v_trips_genie`)*
 - **`source_table`** = `samples.nyctaxi.trips`
 - **`sql_warehouse_id`** = `__________________` *(must be Pro or Serverless)*
 - **`genie_space_name`** = `NYC Taxi Trips Genie`
@@ -41,11 +47,11 @@ Page-agnostic; all knobs live in Unity Catalog or on the Genie Space itself.
 
 ## 2. Overview
 
-**What the plan produces.** A four-object Unity Catalog stack plus one Genie Space:
+**What the plan produces.** A four-object Unity Catalog stack plus one Genie Space (the `demo` catalog itself is shared and pre-existing — operators never create it):
 
 ```
-demo                               ← catalog (managed)
-└── nyctaxi                        ← schema
+demo                               ← catalog (shared, pre-existing)
+└── nyctaxi_${monogram}            ← schema (operator-owned, monogrammed)
     ├── trips_raw                  ← deep clone of samples.nyctaxi.trips (audit / ad-hoc)
     └── v_trips_genie              ← curated view: friendly columns, derived buckets,
                                      valid_trip filter, comments on every column
@@ -71,7 +77,7 @@ NYC Taxi Trips Genie               ← Genie Space (id captured at creation)
 
 **End-to-end flow.**
 
-1. **Catalog + schema** — `manage_uc_objects` (MCP) or `CREATE CATALOG/SCHEMA` (admin UI).
+1. **Schema** — `manage_uc_objects` (MCP) or `CREATE SCHEMA` (admin UI). The `demo` catalog is shared and pre-existing — only the per-operator schema (`demo.nyctaxi_${monogram}`) is created here.
 2. **Raw clone + comments** — `CREATE TABLE IF NOT EXISTS … DEEP CLONE`, then `ANALYZE TABLE`, then `COMMENT ON` + `ALTER TABLE … ALTER COLUMN … COMMENT`.
 3. **Curated view** — single `CREATE OR REPLACE VIEW` with per-column comments.
 4. **Profile validation** — one query confirming row counts and date range, plus the suspicious-records counters.
@@ -83,30 +89,76 @@ NYC Taxi Trips Genie               ← Genie Space (id captured at creation)
 
 ## 3. Databricks-side prerequisites and setup
 
+> **Recommended path:** `databricks bundle deploy -t dev` creates the schemas + grants; `uv run python scripts/bootstrap.py` creates the tables, view, and PDF uploads; `manage_genie` / the UI creates the Genie Space itself. Skip §3.2 (catalog/schema), §3.3, §3.4, §3.5 below if you go this route — they are kept for the imperative-only fallback. §3.6 (create Genie Space) and §3.7 (UI configuration) are still **mandatory** because DAB does not own those.
+
+### 3.0 DAB-first (recommended)
+
+What the bundle owns:
+
+```yaml
+resources:
+  schemas:
+    nyctaxi:
+      catalog_name: demo                 # shared catalog — DAB does NOT create it
+      name: nyctaxi_${workspace.current_user.short_name}
+      comment: NYC taxi sample data curated for Genie + Streamlit feature pages.
+      grants:
+        - principal: ${var.app_sp_client_id}
+          privileges: [USE_SCHEMA, SELECT]
+```
+
+What `scripts/bootstrap.py` owns (run once after `bundle deploy`):
+
+1. `CREATE TABLE IF NOT EXISTS demo.nyctaxi.trips_raw DEEP CLONE samples.nyctaxi.trips`
+2. `ANALYZE TABLE … COMPUTE STATISTICS FOR ALL COLUMNS`
+3. Table + column comments on `trips_raw`
+4. `CREATE OR REPLACE VIEW demo.nyctaxi.v_trips_genie …`
+5. `CREATE OR REPLACE TABLE demo.nyctaxi.trips_for_sync …` + NOT NULL + PRIMARY KEY constraint
+6. `GRANT SELECT ON VIEW demo.nyctaxi.v_trips_genie TO <app_sp>`
+
+Run order from a fresh workspace:
+
+```bash
+# 1. The `demo` catalog is shared and pre-existing — DO NOT create it.
+#    Confirm it exists and that you have USE CATALOG + CREATE SCHEMA on it.
+#    If `demo` is missing, ask the metastore admin to provision it once
+#    (NOT required of operators — it's a one-time platform setup).
+# 2. Deploy the bundle (creates your per-operator schema with grants):
+databricks bundle deploy -t dev
+# 3. Bootstrap tables + view + PDFs:
+uv run python scripts/bootstrap.py \
+    --warehouse-id "$DATABRICKS_WAREHOUSE_ID" \
+    --app-sp-client-id "$DATABRICKS_APP_SP_CLIENT_ID"
+# 4. Create the Genie Space (still manual — see §3.6 / §3.8 below).
+```
+
+The §3.2 / §3.3 / §3.4 / §3.5 sections below are the imperative-only fallback (no DAB tooling available).
+
 ### 3.1 Required privileges and resources
 
-- `CREATE CATALOG` at the metastore (or hand the catalog creation off to a metastore admin and just receive `USE CATALOG` + `CREATE SCHEMA`).
+- `USE CATALOG` + `CREATE SCHEMA` on the shared `demo` catalog. **`CREATE CATALOG` on the metastore is NOT required** — the runbook deliberately uses the existing shared `demo` catalog. If `demo` does not exist in your workspace, request a one-time metastore admin to create it; never request `CREATE CATALOG` for the operator group.
 - `SELECT` on `samples.nyctaxi.trips` — public by default; nothing to do.
 - A running SQL Warehouse with `warehouse_type = PRO` (or Serverless). **Classic warehouses are not supported by Genie.** Run `databricks warehouses list` and pick one; record the ID in §1.1.
 - For end users of the space: workspace access + the SQL warehouse `CAN_USE` + Genie Space `CAN_RUN` + UC `SELECT` on the view (and `USE CATALOG demo` / `USE SCHEMA demo.nyctaxi`).
 
-### 3.2 Phase 1 — Catalog and schema
+### 3.2 Phase 1 — Schema *(optional / fallback — DAB owns the schema in §3.0)*
 
-If you have the Databricks MCP server attached to Claude Code, this is two MCP calls:
+The `demo` catalog is **shared and pre-existing** — do not create it. This step only carves the operator's personal schema inside it.
+
+If you have the Databricks MCP server attached to Claude Code, this is one MCP call:
 
 ```text
-manage_uc_objects(object_type="catalog", action="create", name="demo", comment="Demo catalog for the streamlit-vibe-coding-starter project.")
-manage_uc_objects(object_type="schema",  action="create", name="nyctaxi", catalog_name="demo", comment="NYC taxi sample data curated for Genie + Streamlit feature pages.")
+manage_uc_objects(object_type="schema",  action="create", name="nyctaxi_${monogram}", catalog_name="demo", comment="NYC taxi sample data curated for Genie + Streamlit feature pages.")
 ```
 
-CLI fallback (run as a user with `CREATE CATALOG`):
+CLI fallback (run as a user with `CREATE SCHEMA` on `demo`):
 
 ```bash
-databricks catalogs create --name demo \
-  --comment "Demo catalog for the streamlit-vibe-coding-starter project."
-databricks schemas create --name nyctaxi --catalog-name demo \
+databricks schemas create --name nyctaxi_${monogram} --catalog-name demo \
   --comment "NYC taxi sample data curated for Genie + Streamlit feature pages."
 ```
+
+> **Do not run `databricks catalogs create --name demo`.** This runbook intentionally treats `demo` as shared infrastructure. Operators only need `USE CATALOG` + `CREATE SCHEMA` on it. If `demo` truly doesn't exist, escalate once to the metastore admin rather than granting `CREATE_CATALOG` to the operator group.
 
 ### 3.3 Phase 2 — Raw clone, statistics, comments
 
@@ -223,10 +275,10 @@ Via Databricks MCP / Claude Code, one call:
 
 ```text
 create_or_update_genie(
-  display_name      = "NYC Taxi Trips Genie",
-  table_identifiers = ["demo.nyctaxi.v_trips_genie"],
+  display_name      = "NYC Taxi Trips Genie (${monogram})",
+  table_identifiers = ["demo.nyctaxi_${monogram}.v_trips_genie"],
   warehouse_id      = "<sql_warehouse_id>",
-  description       = "Ask questions about NYC taxi trip counts, fares, trip distances, trip durations, pickup ZIPs, dropoff ZIPs, routes, and pickup-time trends.\n\nThis space uses the curated view demo.nyctaxi.v_trips_genie. Fare means metered fare_amount_usd only; it does not include tips, tolls, taxes, surcharges, or total amount. Location analysis is ZIP-code based. Dataset covers Jan 1 – Feb 29, 2016 (21,932 trips, 21,770 valid).",
+  description       = "Ask questions about NYC taxi trip counts, fares, trip distances, trip durations, pickup ZIPs, dropoff ZIPs, routes, and pickup-time trends.\n\nThis space uses the curated view demo.nyctaxi_${monogram}.v_trips_genie. Fare means metered fare_amount_usd only; it does not include tips, tolls, taxes, surcharges, or total amount. Location analysis is ZIP-code based. Dataset covers Jan 1 – Feb 29, 2016 (21,932 trips, 21,770 valid).",
   sample_questions  = [
     "What are the top 10 pickup ZIP codes by valid trip count?",
     "How do trips and average fare vary by hour of day?",
@@ -240,7 +292,7 @@ create_or_update_genie(
 )
 ```
 
-UI fallback: **Workspace → Genie → New Space**, attach `demo.nyctaxi.v_trips_genie`, pick the Pro/Serverless warehouse, paste the description and the eight sample questions.
+UI fallback: **Workspace → Genie → New Space**, attach `demo.nyctaxi_${monogram}.v_trips_genie`, pick the Pro/Serverless warehouse, paste the description and the eight sample questions, and set the display name to `NYC Taxi Trips Genie (${monogram})`.
 
 The call returns a `space_id` (UUID-ish hex string). **Record it in §1.1** — it's needed by the DAB binding in §4 and by any future Streamlit chat page.
 
@@ -525,18 +577,20 @@ Phases 1–5 are fully scriptable through the Databricks MCP. Phase 6 (synonyms,
 Set up the NYC taxi Genie Space described in docs/plans/0_D_genie_setup.md.
 
 Inputs from §1.1:
-- catalog_name:        demo
-- schema_name:         nyctaxi
+- catalog_name:        demo                   (shared — do NOT create)
+- schema_name:         nyctaxi_${monogram}    (per-operator — you create this)
 - raw_table:           trips_raw
 - curated_view:        v_trips_genie
 - source_table:        samples.nyctaxi.trips
 - sql_warehouse_id:    <fill from §1.1>
-- genie_space_name:    NYC Taxi Trips Genie
+- genie_space_name:    NYC Taxi Trips Genie (${monogram})
 
 Do the following idempotently and report each change you make:
 
-1. Phase 1 — manage_uc_objects create catalog `demo`, then schema `demo.nyctaxi`.
-   Skip whichever already exists.
+1. Phase 1 — DO NOT create the `demo` catalog (shared infrastructure). Only
+   manage_uc_objects create schema `demo.nyctaxi_${monogram}`. Skip if it
+   already exists. If `demo` itself is missing, STOP and ask the user to
+   request the metastore admin to provision it.
 2. Phase 2 — execute_sql for the DEEP CLONE, ANALYZE, table comment,
    and the six ALTER COLUMN comments from §3.3. Use the
    `CREATE TABLE IF NOT EXISTS ... DEEP CLONE` form (the OR REPLACE form
@@ -546,8 +600,8 @@ Do the following idempotently and report each change you make:
    STOP if rows_total is 0 or last_pickup_date is missing.
 5. Phase 5 — create_or_update_genie with the display name, description,
    the eight sample questions, the warehouse_id, and the single attached
-   table `demo.nyctaxi.v_trips_genie`. Print the returned `space_id`
-   and tell me to record it in §1.1.
+   table `demo.nyctaxi_${monogram}.v_trips_genie`. Print the returned
+   `space_id` and tell me to record it in §1.1.
 
 6. Phase 6 — DO NOT try to script this. Instead, print a one-screen
    checklist that lists, in order:
@@ -563,8 +617,8 @@ Do the following idempotently and report each change you make:
    exact Genie UI location (`Configure → Data → <col> → Synonyms`, etc.).
 
 Before mutating anything, print the plan of changes and wait for me to
-confirm. Do not touch any object outside `demo.nyctaxi.*` or the Genie
-Space named above.
+confirm. Do not touch any object outside `demo.nyctaxi_${monogram}.*` or
+the Genie Space named above. Never touch the `demo` catalog itself — it is shared.
 ```
 
 ---
@@ -643,20 +697,21 @@ The bundle adds the Genie resource to the App's resource list. Nothing in the Ap
 ### 5.1 Object verification (run as the deploy SP or as your user)
 
 ```sql
--- catalog + schema present
+-- shared catalog present (you do not own it; just confirm it's there)
 SHOW CATALOGS LIKE 'demo';
-SHOW SCHEMAS IN demo LIKE 'nyctaxi';
+-- your per-operator schema present
+SHOW SCHEMAS IN demo LIKE 'nyctaxi_${monogram}';
 
 -- table cloned, comments applied
-DESCRIBE EXTENDED demo.nyctaxi.trips_raw;
+DESCRIBE EXTENDED demo.nyctaxi_${monogram}.trips_raw;
 
 -- view present with all 16 columns
-DESCRIBE EXTENDED demo.nyctaxi.v_trips_genie;
+DESCRIBE EXTENDED demo.nyctaxi_${monogram}.v_trips_genie;
 
 -- profile sanity (see §3.5 for expected numbers)
 SELECT COUNT(*) AS rows_total, COUNT_IF(valid_trip) AS rows_valid,
        MIN(pickup_date) AS first_pickup_date, MAX(pickup_date) AS last_pickup_date
-FROM   demo.nyctaxi.v_trips_genie;
+FROM   demo.nyctaxi_${monogram}.v_trips_genie;
 ```
 
 ### 5.2 Genie sanity (UI)
@@ -671,12 +726,14 @@ After §3.7 is applied, each of these should generate SQL within one or two seco
 
 ### 5.3 Sharing (one-time)
 
-Grant `<user_group_app>` from `0_A_initial_setup.md`:
+Grant `<user_group_app>` from `0_A_initial_setup.md`. The shared `demo` catalog typically already exposes `USE CATALOG` to the operator group, but downstream end-users typically aren't members of that group — so re-grant `USE CATALOG` to your app's audience group here:
 
 ```sql
-GRANT USE CATALOG ON CATALOG demo                       TO `<user_group_app>`;
-GRANT USE SCHEMA  ON SCHEMA  demo.nyctaxi               TO `<user_group_app>`;
-GRANT SELECT      ON TABLE   demo.nyctaxi.v_trips_genie TO `<user_group_app>`;
+-- Grant on the SHARED catalog (idempotent; safe to re-run):
+GRANT USE CATALOG ON CATALOG demo                                       TO `<user_group_app>`;
+-- Grant on YOUR per-operator schema + view:
+GRANT USE SCHEMA  ON SCHEMA  demo.nyctaxi_${monogram}                   TO `<user_group_app>`;
+GRANT SELECT      ON TABLE   demo.nyctaxi_${monogram}.v_trips_genie     TO `<user_group_app>`;
 ```
 
 Plus, in the Genie Space UI: **Share → add `<user_group_app>` with CAN_RUN**.

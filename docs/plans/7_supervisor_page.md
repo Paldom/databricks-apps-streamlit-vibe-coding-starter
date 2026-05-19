@@ -14,6 +14,8 @@ Page-specific plan for `pages/7_Supervisor.py` — a single chat UI over a Datab
 > 4. The `manage_mas` MCP tool returns `endpoint_status: NOT_APPLICABLE` and no endpoint name. Capture the endpoint name from `databricks supervisor-agents list-supervisor-agents`.
 > 5. Permissions PATCH path needs the **endpoint ID**, not the name. Look up via `databricks serving-endpoints get <name>`.
 
+> **Naming convention — shared catalog, monogrammed schema.** UC data this plan inherits lives in the **shared `demo` catalog** + per-operator schemas (pre-existing). The supervisor display name is `NYC Taxi & Northwind Supervisor (${monogram})`; the two subagents reuse the monogram-suffixed Genie Space and KA endpoint from `0_D` and `6_knowledge_assistant_page.md` respectively. **All literal display names (`NYC Taxi Trips Genie`, `Northwind Knowledge Assistant`, `NYC Taxi & Northwind Supervisor`) and any `demo.nyctaxi.…` / `demo.knowledge_assistant.…` references in the snippets below are placeholders — substitute the `${monogram}`-suffixed schema names and display names everywhere when running for real.** This plan never creates a catalog — `CREATE_CATALOG ON METASTORE` is NOT required.
+
 ---
 
 ## 1. Parameters to set
@@ -341,11 +343,40 @@ The supervisor endpoint is ready as soon as `manage_mas` returns; there's no sep
 
 ## 4. DAB updates
 
-### 4.1 `databricks.yml`
+> **Recommended:** the supervisor tile is still created manually (Agent Bricks isn't in the DAB schema), but the repo's `databricks.yml` now binds the supervisor's serving endpoint to the app via `apps.<name>.resources.serving_endpoint`, so `bundle deploy` grants `CAN_QUERY` to the App SP automatically — replacing the manual `databricks api patch /api/2.0/permissions/serving-endpoints/<ID>` step from §3.4. The PATCH path stays as an **optional alternative** for workspaces without DAB tooling.
 
-No required changes. As with the KA endpoint, the supervisor is not a DAB resource type today, and the permission grant is one PATCH call rather than a bundle-managed binding.
+### 4.1 `databricks.yml` — shipped DAB shape
 
-If/when the bundle schema ships a `supervisor_agents` or `serving_endpoints` resource that's bindable to an app, you can replace §3.4 with a declarative `apps.<name>.resources` entry of type `serving_endpoint` pointing at the supervisor; for now `app.yaml` carries the endpoint name as a literal `value:`.
+```yaml
+variables:
+  supervisor_endpoint_name:
+    description: "Multi-Agent Supervisor serving endpoint name (pattern: mas-<hash>-endpoint)."
+
+resources:
+  apps:
+    streamlit-demo:
+      # ... existing config ...
+      resources:
+        # ... existing entries (Lakebase, SQL warehouse, Genie space, KA endpoint) ...
+        - name: supervisor-endpoint
+          serving_endpoint:
+            name: ${var.supervisor_endpoint_name}
+            permission: CAN_QUERY
+
+targets:
+  dev:
+    variables:
+      supervisor_endpoint_name: "<from §1.1>"
+```
+
+The supervisor's subagent grants (Genie `CAN_RUN`, KA `CAN_QUERY`) are also declared as separate app resource bindings in the bundle — see `5_genie_native_page.md` §4.1 and `6_knowledge_assistant_page.md` §4.1. After `bundle deploy` the App SP holds **all three** grants without any manual PATCH calls.
+
+What still stays manual:
+
+- **Creating the supervisor tile + its subagent list** — §3.2 of this plan. Agent Bricks artefacts are preview and not in DAB.
+- **Updating the routing instructions + SME examples** — re-run `manage_mas(action=create_or_update, …)`; the bundle doesn't see those fields.
+
+Don't run both the §3.4 PATCH **and** declare the binding above — pick one source of truth (the binding is recommended).
 
 ### 4.2 `app.yaml`
 
