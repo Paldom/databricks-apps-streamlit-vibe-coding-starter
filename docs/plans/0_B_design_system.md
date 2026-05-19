@@ -4,6 +4,8 @@ One-time setup for replacing the bundled Databricks design system with your own.
 
 > **Sources of truth.** This plan follows the **`streamlit-custom-style`** skill that ships with this repo (under `.agents/skills/streamlit-custom-style/`). The skill's layered approach is: native theme TOML for ~90% of the work, single `init_page()` bootstrap, scoped `.st-key-*` CSS only when the TOML can't express what you need. See also `DESIGN-SYSTEM.md` (the current Databricks-flavoured one) — your replacement file follows the same outline.
 
+> **DAB-relevant note.** None of the brand artefacts (`.streamlit/`, `static/fonts/`, `assets/logos/`, `DESIGN-SYSTEM.md`) are DAB resources — they're just files synced with the app source. `databricks bundle deploy` ships them to the App's workspace folder automatically. No `resources:` block changes here; design-system updates flow through Git + `bundle deploy` like any other source change.
+
 ---
 
 ## 1. Parameters to set

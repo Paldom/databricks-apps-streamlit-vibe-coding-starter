@@ -2,29 +2,81 @@
 
 One-time setup for this Streamlit-on-Databricks-Apps starter in a new workspace. Complete this plan before any per-page plan (e.g., `1_sample_data_page.md`). Per-page plans assume the scaffolding here is already in place and reuse the values from §1.1.
 
+> **DAB-first architecture.** The repo's `databricks.yml` owns everything that DAB can express — App + permissions + Lakebase stack + UC schemas + UC volume + AI/BI dashboard + every app resource binding (SQL warehouse, Lakebase, Genie Space, KA endpoint, Supervisor endpoint). What it **cannot** own: the `demo` catalog (intentional — `demo` is *shared infrastructure* provisioned once by the metastore admin; operators must NOT create or own it), tables and views (no `tables:` resource type), PDF uploads (no volume-file resource), Agent Bricks artefacts (preview — not in DAB schema). Those leftovers live in `scripts/bootstrap.py` + one-off `manage_*` MCP / CLI calls. Each per-page plan opens with a "Recommended DAB shape" and keeps the imperative `databricks api patch` flow as an **optional alternative** for workspaces without DAB tooling.
+
 ---
 
 ## 1. Parameters to set
 
 The starter itself is small. Fill in the worksheet below — per-page plans cross-reference these names.
 
+> **Naming convention — every resource name carries your monogram.** Multiple developers share a workspace; if two people both create `demo` or `streamlit-demo` they will collide. **Every Databricks resource this project creates is suffixed with the developer's monogram** (2–3 lowercase initials derived from your displayName): catalogs, schemas, volumes, app, Lakebase instance, dashboard display names, Agent Bricks tile names. The `${monogram}` variable below is the single source of truth — every later plan templates it through worksheets, DAB variables, and Claude Code prompts. Pick yours **before** running any other step.
+
 | Parameter | Where it lives | Notes |
 |---|---|---|
-| `app_name` | `databricks.yml` (bundle name + apps key + app `name`) | Must be globally unique inside the workspace. |
+| `monogram` | Everywhere a resource is named | 2–3 lowercase letters, no spaces, hyphens-safe. Derive from `databricks current-user me` → `displayName` (e.g. "Alex Mae Tan" → `amt`, "Sam Lee" → `sl`). Use the same monogram in every workspace you deploy to — it's tied to *you*, not to a target. |
+| `app_name` | `databricks.yml` (bundle name + apps key + app `name`) | Must be globally unique inside the workspace. Convention: `streamlit-demo-${monogram}`. |
 | `bundle_name` | `databricks.yml` `bundle.name` | Usually equal to `app_name`. |
 | `workspace_host` | CLI profile + DAB | Used by `databricks auth login`. No scheme. |
 | `user_group_manage` | `databricks.yml` permissions | Receives `CAN_MANAGE` on the app. |
 | `user_group_app` | `databricks.yml` permissions | Receives `CAN_USE` on the app and on per-page resources. |
 | `deploy_target` | DAB CLI `-t` flag | `dev` by default. |
 
+### 1.0 Derive your monogram
+
+Run this once and stash the result in §1.1 — every subsequent plan reads it:
+
+```bash
+databricks current-user me \
+  | python3 -c '
+import json, sys, re
+name = json.load(sys.stdin)["displayName"]
+# Lowercased first letter of each whitespace-separated token.
+parts = re.split(r"\s+", name.strip())
+mono  = "".join(p[0].lower() for p in parts if p)
+print(f"displayName = {name!r}")
+print(f"monogram    = {mono}")
+'
+```
+
+Example:
+
+```
+displayName = 'Alex Mae Tan'
+monogram    = amt
+```
+
+If the auto-derivation produces something awkward (single-token name, accents, length > 3), pick a short personal initialism by hand. The only requirements: **lowercase ASCII**, **no spaces**, **2–4 characters**.
+
 ### 1.1 Fill-in worksheet
 
-- **`app_name`** = `__________________`
-- **`bundle_name`** = `__________________`
+- **`monogram`** (from §1.0; lowercase ASCII initials) = `__________________`
+- **`app_name`** = `streamlit-demo-${monogram}`
+- **`bundle_name`** = `streamlit-demo-${monogram}`  *(same value — `bundle.name` in `databricks.yml`)*
 - **`workspace_host`** (e.g. `adb-12345.6.azuredatabricks.net`) = `__________________`
 - **`user_group_manage`** = `__________________`
 - **`user_group_app`** = `__________________`
 - **`deploy_target`** = `dev`
+
+### 1.2 Where the monogram appears across the per-page plans
+
+Each later plan extends this worksheet with resource-name slots that **must include your monogram** so they don't collide with another developer's run in the same workspace:
+
+| Plan | Resource shape |
+|---|---|
+| `0_D_genie_setup.md` | Shared catalog `demo` + per-operator schema `demo.nyctaxi_${monogram}`, Genie display name `NYC Taxi Trips Genie (${monogram})` |
+| `1_sample_data_page.md` | Reads `demo.nyctaxi_${monogram}.v_trips_genie` |
+| `2_lakebase_sync_page.md` | Lakebase instance `streamlit-demo-lakebase-${monogram}`, UC catalog `streamlit_demo_lakebase_${monogram}` (separately provisioned by the Lakebase resource — not the shared `demo` catalog), synced table inside it |
+| `3_dashboard_embed_page.md` | Dashboard display name `NYC Taxi Trips Dashboard (${monogram})` |
+| `4_genie_iframe_page.md` / `5_genie_native_page.md` | Reuses the Genie space from `0_D` |
+| `6_knowledge_assistant_page.md` | Shared catalog `demo` + per-operator schema `demo.knowledge_assistant_${monogram}`, volume `demo.knowledge_assistant_${monogram}.docs`, KA tile name `Northwind Knowledge Assistant (${monogram})` |
+| `7_supervisor_page.md` | Supervisor tile name `enterprise-supervisor-agent-${monogram}` |
+
+**The shared `demo` catalog is pre-existing infrastructure.** Operators **never create a catalog** — they only carve personal schemas inside `demo`. UC schema names use **underscores** (`nyctaxi_amt`, `knowledge_assistant_amt`); App / Lakebase instance names use **hyphens** (`streamlit-demo-amt`). The monogram itself is the same in both cases — only the separator differs.
+
+> **Why a shared catalog + per-operator schema?** It avoids the `CREATE_CATALOG ON METASTORE` ticket — the highest-friction permission to obtain. Operators carve schemas they own; the metastore admin only ever provisions `demo` once. If your platform team explicitly wants per-operator catalogs (`demo_${monogram}`) for stricter isolation, that's an opt-in fallback your platform team can grant separately.
+
+> **Why suffix instead of prefix?** Suffix sorts alphabetically alongside the unprefixed canonical names; prefix scatters everyone's work to the bottom of the listing. Either works as long as you pick one — this project ships with suffix.
 
 ---
 

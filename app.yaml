@@ -17,6 +17,16 @@ env:
   # - name: OLTP_CONNECTION_STRING
   #   value: "postgresql://user:pass@host:5432/db"  # Or retrieve from secrets
 
+  # Lakebase synced table - page reads from the Postgres-side replica.
+  # PGHOST / PGDATABASE / PGPORT / PGSSLMODE / PGUSER are auto-injected by
+  # Databricks Apps when a `database:` resource is bound to the app.
+  # - name: LAKEBASE_INSTANCE_NAME
+  #   value: "my-lakebase-instance"
+  # - name: SYNCED_SCHEMA
+  #   value: "my_schema"
+  # - name: SYNCED_TABLE
+  #   value: "my_table"
+
   # ===== AI/ML =====
   # Model Serving - for ML inference
   # - name: MODEL_SERVING_ENDPOINT
@@ -26,14 +36,24 @@ env:
   # - name: VECTOR_SEARCH_ENDPOINT
   #   valueFrom: vector-search-endpoint  # Add Vector Search Endpoint resource with key: vector-search-endpoint
 
-  # Genie - for AI chat
+  # Genie Space - for AI chat / native Conversation API
   # - name: GENIE_SPACE_ID
   #   valueFrom: genie-space           # Add Genie Space resource with key: genie-space
+  # - name: GENIE_SPACE_URL                                            # iframe-embed variant
+  #   value: "https://<workspace-host>/embed/genie/rooms/<space-id>"
+
+  # Knowledge Assistant (Agent Bricks) - serving endpoint
+  # - name: KA_ENDPOINT_NAME
+  #   valueFrom: ka-endpoint           # Add the serving endpoint as an app resource
+
+  # Multi-Agent Supervisor (Agent Bricks) - serving endpoint
+  # - name: SUPERVISOR_ENDPOINT_NAME
+  #   valueFrom: supervisor-endpoint   # Add the serving endpoint as an app resource
 
   # ===== Business Intelligence =====
   # Dashboard - embed URL (get from Dashboard → Share → Embed iframe)
   # - name: DASHBOARD_EMBED_URL
-  #   value: "https://<workspace-host>/embed/dashboardsv3/<dashboard-id>"  # Update with your dashboard embed URL
+  #   value: "https://<workspace-host>/embed/dashboardsv3/<dashboard-id>"
 
   # ===== Workflows =====
   # Job - for triggering workflows

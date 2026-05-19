@@ -6,6 +6,8 @@ One-time setup for the minimalist CI/CD pipeline shipped under `.github/workflow
 
 > **Sources.** Databricks GitHub OIDC docs: https://docs.databricks.com/aws/en/dev-tools/auth/provider-github. The expanded design (preview environments, multi-workspace promotion, Lakebase branches) is documented in `.local/cicd/CICD-ARTICLE-v2.md`; this plan implements the **minimalist** slice of it.
 
+> **DAB-relevant note.** The `Deploy` workflow runs `databricks bundle deploy -t dev`, which now creates substantially more than the App alone — schemas, the volume, the Lakebase stack, the dashboard, and every app resource binding. `scripts/bootstrap.py` (tables / views / PDF uploads / Agent Bricks artefacts) is **not** invoked from CI today — it's a one-off after-deploy step for fresh workspaces. If you want it CI-driven, add a third step to `deploy.yml` after the `bundle run` line: `uv run python scripts/bootstrap.py --warehouse-id $WAREHOUSE_ID --app-sp-client-id $APP_SP_CLIENT_ID --skip-uploads`. The `--skip-uploads` is optional but recommended in CI (uploads are slow + the volume content rarely changes between deploys).
+
 ---
 
 ## Pick an auth path before going further

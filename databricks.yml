@@ -1,16 +1,17 @@
 # Databricks Asset Bundle for the Streamlit-on-Apps starter.
 #
 # Quickstart:
-#   1. Edit the dev target below: replace the <...> placeholders with
-#      your workspace's group names.
+#   1. Edit the dev target below — fill in the <...> placeholders for your
+#      workspace's group names and (when you add a feature page that needs
+#      one) the SQL warehouse ID.
 #   2. Authenticate the CLI:    databricks auth login --host https://<workspace-host>
 #   3. Validate the bundle:     databricks bundle validate -t dev
 #   4. Deploy and run the app:  databricks bundle deploy -t dev
 #                               databricks bundle run streamlit-demo -t dev
 #
-# Per-page plans under docs/plans/ extend this file: they add variables,
-# append entries to resources.apps.streamlit-demo.resources, and add
-# values to targets.dev.variables. Start with docs/plans/0_initial_setup.md.
+# Per-page plans under docs/plans/ extend this file. Each plan calls out
+# exactly what to append (new variables, new resources, new app-resource
+# bindings, new target values). Start with docs/plans/0_A_initial_setup.md.
 #
 # See DEPLOY.md for the full deploy story and the manual-deploy alternative.
 
@@ -18,22 +19,32 @@ bundle:
   name: streamlit-demo
 
 variables:
+  # ---- App permissions (workspace groups)
   user_group_manage:
     description: "User group that receives CAN_MANAGE on the app."
   user_group_app:
     description: "User group that receives CAN_USE on the app and on per-page resources."
 
+  # ---- Per-page variables — uncomment as you add features.
+  # SQL Warehouse for any page that uses sql_conn() (see docs/plans/1_sample_data_page.md):
+  # sql_warehouse_id:
+  #   description: "SQL Warehouse ID used by data-access pages."
+
 resources:
   apps:
     streamlit-demo:
-      name: streamlit-demo-2026-05-17
+      name: streamlit-demo
       source_code_path: ./
       permissions:
         - level: CAN_MANAGE
           group_name: ${var.user_group_manage}
         - level: CAN_USE
           group_name: ${var.user_group_app}
-      resources: []   # per-page plans append entries here (SQL warehouses, Genie spaces, etc.)
+      resources: []   # per-page plans append entries here:
+                      # - SQL warehouse binding (Sample Data page)
+                      # - Lakebase database binding (Lakebase Sync page)
+                      # - Genie space binding (Genie native page)
+                      # - Serving-endpoint bindings (KA + Supervisor pages)
 
 # Files synced to the workspace alongside the app source.
 # Excludes keep deploys small and prevent doc/CI files from cluttering the app folder.

@@ -6,6 +6,7 @@ A production-ready starter template for building Streamlit apps on Databricks Ap
 
 ## Features
 
+- **Implementation plans for every capability.** [`docs/plans/`](docs/plans/) ships standalone runbooks for the design system, CI/CD on GitHub Actions, and feature pages spanning UC analytics, Lakebase sync, embedded BI dashboards, two Genie variants, Knowledge Assistant chat, and a Multi-Agent Supervisor — each replayable in a working day. See **[Feature Plans](#feature-plans-docsplans)** below.
 - **Databricks-branded look-and-feel out of the box.** DM Sans + DM Mono, Databricks colour anchors, dark mode, sidebar palette, and chart palettes — all defined as Streamlit theme tokens in `.streamlit/brand-theme.toml`. See [`DESIGN-SYSTEM.md`](DESIGN-SYSTEM.md) for the brand guide.
 - **One-call page bootstrap.** `utils.init_page(page_title=...)` wires `st.set_page_config()`, `st.logo()`, and the signed-in user badge — no per-page drift.
 - **OBO authentication.** Forwarded user token via `X-Forwarded-Access-Token` flows into `sql_conn()` and `workspace_client_obo()`; Unity Catalog row/column policies are enforced for the signed-in user automatically.
@@ -36,6 +37,37 @@ Notes:
 - The home page (`app.py`) renders without any Databricks-side wiring. Pages under `pages/` that call `sql_conn()`, Genie, etc., need the corresponding env vars set in your shell (`SQL_WAREHOUSE_ID`, `UNITY_CATALOG_TABLE`, `GENIE_SPACE_ID`, ...) plus a way to inject the OBO `X-Forwarded-Access-Token` header. The Databricks Apps runtime sets all of this in production.
 - For a higher-fidelity local run that mirrors the Databricks Apps runtime (resolves `valueFrom` resources, sets the same env vars, picks the entrypoint from `app.yaml`), use `databricks apps run-local` — see [DEPLOY.md § C](DEPLOY.md).
 - Add new dependencies with `uv add <package>`. **Do not** create a `requirements.txt`; Databricks Apps gives it precedence over `pyproject.toml` and silently falls back to pip.
+
+## Feature Plans (`docs/plans/`)
+
+The plans are the starter's primary value. The repo itself ships only the scaffolding (`utils.py`, design system, bundle skeleton, CI/CD); each capability gets built by following a plan, which inlines the full page source so you can replay it without flipping between files.
+
+Every plan follows the same five-part structure:
+
+1. **Parameters** — fill-in worksheet for your deployment's actual values.
+2. **Overview** — what the feature does, why this approach, end-to-end flow.
+3. **Databricks-side prerequisites** — UC / Lakebase / Agent Bricks setup, with a copy-pasteable Claude Code prompt for each step.
+4. **DAB updates** — exact diffs to append to `databricks.yml`.
+5. **Source code updates** — full inline source for `pages/<N>_*.py` + `app.yaml` env entries.
+
+Each finishes with a **Verification** section (compile / bundle validate / deploy / browser smoke test, plus negative tests for permissions) and a **What to avoid** section (the gotchas worth knowing up front).
+
+| Plan | Sets up |
+|---|---|
+| [`0_A_initial_setup.md`](docs/plans/0_A_initial_setup.md) | App + bundle + `utils.py` + `uv` baseline + ai-dev-kit local tooling |
+| [`0_B_design_system.md`](docs/plans/0_B_design_system.md) | Brand-theme TOML + DM Sans / DM Mono + logo variants (or your own brand) |
+| [`0_C_github_actions.md`](docs/plans/0_C_github_actions.md) | CI + Deploy workflows (OIDC + client-secret paths) with public-repo hardening |
+| [`0_D_genie_setup.md`](docs/plans/0_D_genie_setup.md) | Curated UC catalog / schema / view + Genie Space configuration + benchmarks |
+| [`1_sample_data_page.md`](docs/plans/1_sample_data_page.md) | UC table browser with OBO + sidebar filters + headline metrics |
+| [`2_lakebase_sync_page.md`](docs/plans/2_lakebase_sync_page.md) | Lakebase synced table + psycopg pool with OAuth-token rotation |
+| [`3_dashboard_embed_page.md`](docs/plans/3_dashboard_embed_page.md) | AI/BI dashboard built via JSON + iframe embed |
+| [`4_genie_iframe_page.md`](docs/plans/4_genie_iframe_page.md) | Genie iframe variant (viewer's identity carries) |
+| [`5_genie_native_page.md`](docs/plans/5_genie_native_page.md) | Genie native chat via Conversation API (App SP) |
+| [`6_knowledge_assistant_page.md`](docs/plans/6_knowledge_assistant_page.md) | Agent Bricks Knowledge Assistant chat with citations |
+| [`7_supervisor_page.md`](docs/plans/7_supervisor_page.md) | Multi-Agent Supervisor combining Genie + Knowledge Assistant |
+| [`sum.md`](docs/plans/sum.md) | Project summary — narrative for technical + executive audiences |
+
+**Recommended path** — work down the ladder in order: do `0_A` first for the workspace bootstrap, layer in `0_B` if you want a different brand, wire up `0_C` for CI/CD. Then pick feature pages à la carte — each is self-contained, so `5_genie_native_page.md` doesn't require `4_genie_iframe_page.md` to be done first.
 
 ## Quick Start
 
