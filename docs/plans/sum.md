@@ -8,7 +8,7 @@ Audience: a mix of executive (decision-makers) and technical (implementers). The
 
 ## Chapter 1 · Executive Summary
 
-This project is a **production-shaped starter** for building Streamlit applications on the Databricks Apps platform. It walks the full Databricks Data Intelligence stack — Unity Catalog, SQL Warehouses, AI/BI Dashboards, AI/BI Genie, Lakebase, Knowledge Assistant, and the Multi-Agent Supervisor — through a single Streamlit app with seven feature pages.
+This project is a **production-shaped starter** for building Streamlit applications on the Databricks Apps platform. It walks the full Databricks Data Intelligence stack — Unity Catalog, SQL Warehouses, AI/BI Dashboards, AI/BI Genie, Lakebase, Knowledge Assistant, and the Multi-Agent Supervisor — as seven feature-page implementation plans under `docs/plans/`, each replayable in a working day by a developer with Claude Code (or any LLM-driven dev environment). The repo itself ships only the scaffolding (utils, design system, bundle skeleton, CI/CD); the feature pages get built by following the plans.
 
 The point isn't the specific dataset (we use the public NYC taxi sample + three fictional Northwind PDFs). The point is the **shape**: each capability is wired up the way Databricks intends — governance through Unity Catalog, serverless compute through SQL Warehouses, agent orchestration through Agent Bricks, deploys through Databricks Asset Bundles — so the same shape can carry your real data on day one.
 
@@ -16,7 +16,7 @@ Every step is also documented as a standalone implementation plan in `docs/plans
 
 **Naming convention — monogram suffix.** Shared Databricks workspaces are common, so every resource this project creates is suffixed with the developer's monogram (2–3 lowercase initials derived from `databricks current-user me` → `displayName`, e.g. "Alex Mae Tan" → `amt`). UC objects use underscore form (`demo_amt.nyctaxi.v_trips_genie`); App / Lakebase / serving-endpoint names use hyphen form (`streamlit-demo-amt`); Genie / KA / supervisor display names append `(${monogram})` in parentheses. The convention is captured once in `0_A_initial_setup.md` §1.0 and every later plan inherits it.
 
-**What you can show in a 15-minute demo:** open a UC table, watch it surface in a Postgres view, drop into an embedded BI dashboard, ask the same data conversational questions in Genie, query a separate set of governed PDFs in a chat that cites sources, then ask one supervisor agent a cross-domain question that fans out to both specialists — without leaving the Streamlit app.
+**What you can show in a 15-minute demo (after running the plans):** open a UC table, watch it surface in a Postgres view, drop into an embedded BI dashboard, ask the same data conversational questions in Genie, query a separate set of governed PDFs in a chat that cites sources, then ask one supervisor agent a cross-domain question that fans out to both specialists — all without leaving the Streamlit app.
 
 ---
 

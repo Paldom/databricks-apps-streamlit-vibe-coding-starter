@@ -17,15 +17,15 @@ env:
   # - name: OLTP_CONNECTION_STRING
   #   value: "postgresql://user:pass@host:5432/db"  # Or retrieve from secrets
 
-  # Lakebase synced table — page reads from the Postgres-side replica.
+  # Lakebase synced table - page reads from the Postgres-side replica.
   # PGHOST / PGDATABASE / PGPORT / PGSSLMODE / PGUSER are auto-injected by
-  # Databricks Apps when the `lakebase-db` resource is bound to the app.
-  - name: LAKEBASE_INSTANCE_NAME
-    value: "streamlit-demo-lakebase"      # Must match databricks.yml var.lakebase_instance_name
-  - name: SYNCED_SCHEMA
-    value: "nyctaxi"
-  - name: SYNCED_TABLE
-    value: "trips_synced"
+  # Databricks Apps when a `database:` resource is bound to the app.
+  # - name: LAKEBASE_INSTANCE_NAME
+  #   value: "my-lakebase-instance"
+  # - name: SYNCED_SCHEMA
+  #   value: "my_schema"
+  # - name: SYNCED_TABLE
+  #   value: "my_table"
 
   # ===== AI/ML =====
   # Model Serving - for ML inference
@@ -36,33 +36,24 @@ env:
   # - name: VECTOR_SEARCH_ENDPOINT
   #   valueFrom: vector-search-endpoint  # Add Vector Search Endpoint resource with key: vector-search-endpoint
 
-  # Genie Space — two pages share this space.
-  #   - 4_NYC_Taxi_Genie_iFrame.py uses GENIE_SPACE_URL (iframe embed).
-  #   - 5_NYC_Taxi_Genie_native.py uses GENIE_SPACE_ID (Conversation API
-  #     via Databricks SDK + native Streamlit chat UI).
-  - name: GENIE_SPACE_ID
-    value: "01f152305d531fc9b1c8e70b439bfa9e"
+  # Genie Space - for AI chat / native Conversation API
+  # - name: GENIE_SPACE_ID
+  #   valueFrom: genie-space           # Add Genie Space resource with key: genie-space
+  # - name: GENIE_SPACE_URL                                            # iframe-embed variant
+  #   value: "https://<workspace-host>/embed/genie/rooms/<space-id>"
 
-  # Iframe embed URL — workspace UI → Genie → <space> → Share → Embed iframe
-  # to confirm the exact path. Pattern: <host>/embed/genie/rooms/<space-id>.
-  - name: GENIE_SPACE_URL
-    value: "https://adb-1272983411735654.14.azuredatabricks.net/embed/genie/rooms/01f152305d531fc9b1c8e70b439bfa9e"
+  # Knowledge Assistant (Agent Bricks) - serving endpoint
+  # - name: KA_ENDPOINT_NAME
+  #   valueFrom: ka-endpoint           # Add the serving endpoint as an app resource
 
-  # Knowledge Assistant (Agent Bricks) — serving endpoint for the
-  # Northwind PDFs page (6_Knowledge_Assistant.py).
-  - name: KA_ENDPOINT_NAME
-    value: "ka-fa945a0b-endpoint"
-
-  # Supervisor Agent (Agent Bricks) — routes between the Genie Space + KA.
-  # Used by 7_Supervisor.py.
-  - name: SUPERVISOR_ENDPOINT_NAME
-    value: "mas-ccec4a8f-endpoint"
+  # Multi-Agent Supervisor (Agent Bricks) - serving endpoint
+  # - name: SUPERVISOR_ENDPOINT_NAME
+  #   valueFrom: supervisor-endpoint   # Add the serving endpoint as an app resource
 
   # ===== Business Intelligence =====
-  # Dashboard - embed URL for the NYC Taxi AI/BI dashboard
-  # (Workspace → Dashboards → Share → Embed iframe).
-  - name: DASHBOARD_EMBED_URL
-    value: "https://adb-1272983411735654.14.azuredatabricks.net/embed/dashboardsv3/01f152dc97b912a6afa69f29d7e043de"
+  # Dashboard - embed URL (get from Dashboard → Share → Embed iframe)
+  # - name: DASHBOARD_EMBED_URL
+  #   value: "https://<workspace-host>/embed/dashboardsv3/<dashboard-id>"
 
   # ===== Workflows =====
   # Job - for triggering workflows
